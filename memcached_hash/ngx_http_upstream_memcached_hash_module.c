@@ -241,7 +241,7 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
 
   memd->total_weight = 0;
 
-  for (i = 0; i < us->servers->nelts; i++)
+  for (i = 0; i < us->servers->nelts; ++i)
     {
       memd->total_weight += server[i].weight;
       ngx_memzero(&memd->peers[i], sizeof(memd->peers[i]));
@@ -256,7 +256,7 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
   else
     {
       bins_count = 0;
-      for (i = 0; i < us->servers->nelts; i++)
+      for (i = 0; i < us->servers->nelts; ++i)
         bins_count += (memd->ketama_points * server[i].weight
                        + memd->scale / 2) / memd->scale;
     }
@@ -264,12 +264,11 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
   memd->bins = ngx_palloc(cf->pool, sizeof(*memd->bins) * bins_count);
   if (! memd->bins)
     return NGX_ERROR;
-  memd->bins_count = bins_count;
 
   if (memd->ketama_points == 0)
     {
       ngx_uint_t offset = 0;
-      for (i = 0; i < us->servers->nelts; i++)
+      for (i = 0; i < us->servers->nelts; ++i)
         {
           memd->bins[i].point =
             offset + ((uint64_t) CONTINUUM_MAX_POINT * server[i].weight
@@ -277,10 +276,12 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
           offset = memd->bins[i].point;
           memd->bins[i].index = i;
         }
+      memd->bins_count = bins_count;
     }
   else
     {
-      for (i = 0; i < us->servers->nelts; i++)
+      memd->bins_count = 0;
+      for (i = 0; i < us->servers->nelts; ++i)
         {
           static const char delim = '\0';
           char *host, *port;
@@ -316,8 +317,7 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
 
           count = (memd->ketama_points * server[i].weight
                    + memd->scale / 2) / memd->scale;
-          bins_count = 0;
-          for (j = 0; j < count; j++)
+          for (j = 0; j < count; ++j)
             {
               char buf[4];
               unsigned int point = crc32, bin;
@@ -334,7 +334,7 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
               ngx_crc32_update(&point, buf, 4);
               ngx_crc32_final(point);
 
-              if (bins_count > 0)
+              if (memd->bins_count > 0)
                 {
                   bin = memcached_hash_find_bin(memd, point);
 
@@ -374,7 +374,7 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
               memd->bins[bin].point = point;
               memd->bins[bin].index = i;
 
-              ++bins_count;
+              ++memd->bins_count;
             }
         }
     }
@@ -398,7 +398,7 @@ memcached_hash(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
   uscf = ngx_http_conf_get_module_srv_conf(cf, ngx_http_upstream_module);
 
-  for (i = 1; i < cf->args->nelts; i++)
+  for (i = 1; i < cf->args->nelts; ++i)
     {
       if (ngx_strncmp(value[i].data, "ketama_points=", 14) == 0)
         {
