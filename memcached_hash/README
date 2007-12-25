@@ -1,12 +1,13 @@
-nginx_memcached_hash 0.01
-=========================
+ngx_http_upstream_memcached_hash_module 0.01
+============================================
 
 Description.
 
 
 INSTALLATION
 
-  ./configure --add-module=/path/to/nginx_memcached_hash-0.01/
+  ./configure \
+      --add-module=/path/to/ngx_http_upstream_memcached_hash_module-0.01/
 
 
 USAGE
