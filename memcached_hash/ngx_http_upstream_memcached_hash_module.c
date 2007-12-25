@@ -141,30 +141,38 @@ memcached_hash_init_peer(ngx_http_request_t *r,
   size_t len;
   unsigned int point, bin, index;
 
-  /*
-    We take the key directly from request_buf, because there it is in
-    the form that will be seen by memcached server.
-  */
-  key = r->upstream->request_bufs->buf->start + (sizeof("get ") - 1);
-  len = r->upstream->request_bufs->buf->last - key - (sizeof("\r\n") - 1);
-
-  point = ngx_crc32_long(key, len);
-
-  if (memd->ketama_points == 0)
+  if (memd->peer_count == 1)
     {
-      point = ((point >> 16) & 0x00007fff);
-      point = point % ((memd->total_weight + memd->scale / 2) / memd->scale);
-      point = ((uint64_t) point * CONTINUUM_MAX_POINT
-               + memd->total_weight / 2) / memd->total_weight;
-      /*
-        Shift point one step forward to possibly get from the border
-        point which belongs to the previous bin.
-      */
-      point += 1;
+      index = 0;
     }
+  else
+    {
+      /*
+        We take the key directly from request_buf, because there it is
+        in the form that will be seen by memcached server.
+      */
+      key = r->upstream->request_bufs->buf->start + (sizeof("get ") - 1);
+      len = r->upstream->request_bufs->buf->last - key - (sizeof("\r\n") - 1);
 
-  bin = memcached_hash_find_bin(memd, point);
-  index = memd->bins[bin].index;
+      point = ngx_crc32_long(key, len);
+
+      if (memd->ketama_points == 0)
+        {
+          point = ((point >> 16) & 0x00007fff);
+          point = point % ((memd->total_weight + memd->scale / 2)
+                           / memd->scale);
+          point = ((uint64_t) point * CONTINUUM_MAX_POINT
+                   + memd->total_weight / 2) / memd->total_weight;
+          /*
+            Shift point one step forward to possibly get from the
+            border point which belongs to the previous bin.
+          */
+          point += 1;
+        }
+
+      bin = memcached_hash_find_bin(memd, point);
+      index = memd->bins[bin].index;
+    }
 
   r->upstream->peer.data = &memd->peers[index];
   r->upstream->peer.get = memcached_hash_get_peer;
@@ -180,8 +188,13 @@ ngx_int_t
 memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
 {
   struct memcached_hash *memd = us->peer.data;
-  ngx_http_upstream_server_t *server = us->servers->elts;
+  ngx_http_upstream_server_t *server;
   unsigned int bins_count, i;
+
+  if (! us->servers)
+    return NGX_ERROR;
+
+  server = us->servers->elts;
 
   us->peer.init = memcached_hash_init_peer;
 
@@ -348,13 +361,6 @@ memcached_hash(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
   scale = 1;
 
   uscf = ngx_http_conf_get_module_srv_conf(cf, ngx_http_upstream_module);
-
-  if (! uscf->servers)
-    {
-      ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                         "no servers are inside upstream");
-      return NGX_CONF_ERROR;
-    }
 
   for (i = 1; i < cf->args->nelts; i++)
     {
