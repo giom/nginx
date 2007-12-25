@@ -45,6 +45,14 @@ struct memcached_hash
 };
 
 
+struct memcached_hash_find_ctx
+{
+  struct memcached_hash *memd;
+  ngx_http_upstream_server_t *server;
+  ngx_chain_t **request_bufs;
+};
+
+
 static
 unsigned int
 memcached_hash_find_bin(struct memcached_hash *memd, unsigned int point)
@@ -108,6 +116,58 @@ fail:
 
 
 static
+ngx_int_t
+memcached_hash_find_peer(ngx_peer_connection_t *pc, void *data)
+{
+  struct memcached_hash_find_ctx *find_ctx = data;
+  struct memcached_hash *memd = find_ctx->memd;
+  u_char *key;
+  size_t len;
+  unsigned int point, bin, index;
+
+  if (memd->peer_count == 1)
+    {
+      index = 0;
+    }
+  else
+    {
+      /*
+        We take the key directly from request_buf, because there it is
+        in the escaped form that will be seen by memcached server.
+      */
+      key = (*find_ctx->request_bufs)->buf->start + (sizeof("get ") - 1);
+      len = (((*find_ctx->request_bufs)->buf->last - key)
+             - (sizeof("\r\n") - 1));
+
+      point = ngx_crc32_long(key, len);
+
+      if (memd->ketama_points == 0)
+        {
+          point = ((point >> 16) & 0x00007fff);
+          point = point % ((memd->total_weight + memd->scale / 2)
+                           / memd->scale);
+          point = ((uint64_t) point * CONTINUUM_MAX_POINT
+                   + memd->total_weight / 2) / memd->total_weight;
+          /*
+            Shift point one step forward to possibly get from the
+            border point which belongs to the previous bin.
+          */
+          point += 1;
+        }
+
+      bin = memcached_hash_find_bin(memd, point);
+      index = memd->bins[bin].index;
+    }
+
+  pc->data = &memd->peers[index];
+  pc->get = memcached_hash_get_peer;
+  pc->tries = find_ctx->server[index].naddrs;
+
+  return memcached_hash_get_peer(pc, pc->data);
+}
+
+
+static
 void
 memcached_hash_free_peer(ngx_peer_connection_t *pc, void *data,
                          ngx_uint_t state)
@@ -136,48 +196,24 @@ memcached_hash_init_peer(ngx_http_request_t *r,
                          ngx_http_upstream_srv_conf_t *us)
 {
   struct memcached_hash *memd = us->peer.data;
-  ngx_http_upstream_server_t *server = us->servers->elts;
-  u_char *key;
-  size_t len;
-  unsigned int point, bin, index;
+  struct memcached_hash_find_ctx *find_ctx;
 
-  if (memd->peer_count == 1)
-    {
-      index = 0;
-    }
-  else
-    {
-      /*
-        We take the key directly from request_buf, because there it is
-        in the form that will be seen by memcached server.
-      */
-      key = r->upstream->request_bufs->buf->start + (sizeof("get ") - 1);
-      len = r->upstream->request_bufs->buf->last - key - (sizeof("\r\n") - 1);
+  find_ctx = ngx_palloc(r->pool, sizeof(*find_ctx));
+  if (! find_ctx)
+    return NGX_ERROR;
+  find_ctx->memd = memd;
+  find_ctx->request_bufs = &r->upstream->request_bufs;
+  find_ctx->server = us->servers->elts;
 
-      point = ngx_crc32_long(key, len);
-
-      if (memd->ketama_points == 0)
-        {
-          point = ((point >> 16) & 0x00007fff);
-          point = point % ((memd->total_weight + memd->scale / 2)
-                           / memd->scale);
-          point = ((uint64_t) point * CONTINUUM_MAX_POINT
-                   + memd->total_weight / 2) / memd->total_weight;
-          /*
-            Shift point one step forward to possibly get from the
-            border point which belongs to the previous bin.
-          */
-          point += 1;
-        }
-
-      bin = memcached_hash_find_bin(memd, point);
-      index = memd->bins[bin].index;
-    }
-
-  r->upstream->peer.data = &memd->peers[index];
-  r->upstream->peer.get = memcached_hash_get_peer;
   r->upstream->peer.free = memcached_hash_free_peer;
-  r->upstream->peer.tries = server[index].naddrs;
+
+  /*
+    The following values will be replaced by
+    memcached_hash_find_peer().
+  */
+  r->upstream->peer.get = memcached_hash_find_peer;
+  r->upstream->peer.data = find_ctx;
+  r->upstream->peer.tries = 1;
 
   return NGX_OK;
 }
