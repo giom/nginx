@@ -1,0 +1,14 @@
+- Test work with SSL (maybe we had to save/restore SSL context).
+
+- Add script populate.pl.
+
+- Check key distribution.
+
+- Comment the code, especially integer computations.
+
+- Write documentation.
+
+- Add dist.pl, test version consistency there, pack patches for nginx
+  into the distribution.
+
+- Add gzip support.
