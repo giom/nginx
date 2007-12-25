@@ -144,8 +144,7 @@ memcached_hash_find_peer(ngx_peer_connection_t *pc, void *data)
       if (memd->ketama_points == 0)
         {
           point = ((point >> 16) & 0x00007fff);
-          point = point % ((memd->total_weight + memd->scale / 2)
-                           / memd->scale);
+          point = point % memd->total_weight;
           point = ((uint64_t) point * CONTINUUM_MAX_POINT
                    + memd->total_weight / 2) / memd->total_weight;
           /*
@@ -267,13 +266,21 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
 
   if (memd->ketama_points == 0)
     {
-      ngx_uint_t offset = 0;
+      unsigned int total_weight = 0;
       for (i = 0; i < us->servers->nelts; ++i)
         {
-          memd->bins[i].point =
-            offset + ((uint64_t) CONTINUUM_MAX_POINT * server[i].weight
-                      + memd->total_weight / 2) / memd->total_weight;
-          offset = memd->bins[i].point;
+          unsigned int j;
+
+          total_weight += server[i].weight;
+          for (j = 0; j < i; ++j)
+            {
+              memd->bins[j].point =
+                (memd->bins[j].point
+                 - ((uint64_t) memd->bins[j].point * server[i].weight
+                    + total_weight / 2) / total_weight);
+            }
+
+          memd->bins[i].point = CONTINUUM_MAX_POINT;
           memd->bins[i].index = i;
         }
       memd->bins_count = bins_count;
@@ -291,13 +298,13 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
           host = server[i].addrs[0].name.data;
           len = server[i].addrs[0].name.len;
 
-#if (NGX_HAVE_UNIX_DOMAIN)
+#if NGX_HAVE_UNIX_DOMAIN
           if (ngx_strncasecmp(host, "unix:", 5) == 0)
             {
               host += 5;
               len -= 5;
             }
-#endif
+#endif /* NGX_HAVE_UNIX_DOMAIN */
 
           port = host;
           while (*port)
