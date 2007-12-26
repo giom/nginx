@@ -198,7 +198,7 @@ ngx_int_t
 ngx_ssl_certificate(ngx_conf_t *cf, ngx_ssl_t *ssl, ngx_str_t *cert,
     ngx_str_t *key)
 {
-    if (ngx_conf_full_name(cf->cycle, cert) == NGX_ERROR) {
+    if (ngx_conf_full_name(cf->cycle, cert, 1) == NGX_ERROR) {
         return NGX_ERROR;
     }
 
@@ -211,7 +211,7 @@ ngx_ssl_certificate(ngx_conf_t *cf, ngx_ssl_t *ssl, ngx_str_t *cert,
         return NGX_ERROR;
     }
 
-    if (ngx_conf_full_name(cf->cycle, key) == NGX_ERROR) {
+    if (ngx_conf_full_name(cf->cycle, key, 1) == NGX_ERROR) {
         return NGX_ERROR;
     }
 
@@ -242,7 +242,7 @@ ngx_ssl_client_certificate(ngx_conf_t *cf, ngx_ssl_t *ssl, ngx_str_t *cert,
         return NGX_OK;
     }
 
-    if (ngx_conf_full_name(cf->cycle, cert) == NGX_ERROR) {
+    if (ngx_conf_full_name(cf->cycle, cert, 1) == NGX_ERROR) {
         return NGX_ERROR;
     }
 
@@ -593,10 +593,13 @@ ngx_ssl_recv(ngx_connection_t *c, u_char *buf, size_t size)
     int  n, bytes;
 
     if (c->ssl->last == NGX_ERROR) {
+        c->read->error = 1;
         return NGX_ERROR;
     }
 
     if (c->ssl->last == NGX_DONE) {
+        c->read->ready = 0;
+        c->read->eof = 1;
         return 0;
     }
 
@@ -619,26 +622,38 @@ ngx_ssl_recv(ngx_connection_t *c, u_char *buf, size_t size)
 
         c->ssl->last = ngx_ssl_handle_recv(c, n);
 
-        if (c->ssl->last != NGX_OK) {
+        if (c->ssl->last == NGX_OK) {
 
-            if (bytes) {
+            size -= n;
+
+            if (size == 0) {
                 return bytes;
             }
 
-            if (c->ssl->last == NGX_DONE) {
-                return 0;
-            }
+            buf += n;
 
-            return c->ssl->last;
+            continue;
         }
 
-        size -= n;
-
-        if (size == 0) {
+        if (bytes) {
             return bytes;
         }
 
-        buf += n;
+        switch (c->ssl->last) {
+
+        case NGX_DONE:
+            c->read->ready = 0;
+            c->read->eof = 1;
+            return 0;
+
+        case NGX_ERROR:
+            c->read->error = 1;
+
+            /* fall thruogh */
+
+        case NGX_AGAIN:
+            return c->ssl->last;
+        }
     }
 }
 
@@ -703,7 +718,6 @@ ngx_ssl_handle_recv(ngx_connection_t *c, int n)
 
     c->ssl->no_wait_shutdown = 1;
     c->ssl->no_send_shutdown = 1;
-    c->read->eof = 1;
 
     if (sslerr == SSL_ERROR_ZERO_RETURN || ERR_peek_error() == 0) {
         ngx_log_debug0(NGX_LOG_DEBUG_EVENT, c->log, 0,
@@ -711,7 +725,6 @@ ngx_ssl_handle_recv(ngx_connection_t *c, int n)
         return NGX_DONE;
     }
 
-    c->read->error = 1;
     ngx_ssl_connection_error(c, sslerr, err, "SSL_read() failed");
 
     return NGX_ERROR;
@@ -1228,11 +1241,8 @@ ngx_ssl_session_cache_init(ngx_shm_zone_t *shm_zone, void *data)
         return NGX_ERROR;
     }
 
-    ngx_rbtree_sentinel_init(sentinel);
-
-    cache->session_rbtree->root = sentinel;
-    cache->session_rbtree->sentinel = sentinel;
-    cache->session_rbtree->insert = ngx_ssl_session_rbtree_insert_value;
+    ngx_rbtree_init(cache->session_rbtree, sentinel,
+                    ngx_ssl_session_rbtree_insert_value);
 
     shm_zone->data = cache;
 
@@ -1612,56 +1622,37 @@ static void
 ngx_ssl_session_rbtree_insert_value(ngx_rbtree_node_t *temp,
     ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel)
 {
-    ngx_ssl_sess_id_t  *sess_id, *sess_id_temp;
+    ngx_rbtree_node_t  **p;
+    ngx_ssl_sess_id_t   *sess_id, *sess_id_temp;
 
     for ( ;; ) {
 
         if (node->key < temp->key) {
 
-            if (temp->left == sentinel) {
-                temp->left = node;
-                break;
-            }
-
-            temp = temp->left;
+            p = &temp->left;
 
         } else if (node->key > temp->key) {
 
-            if (temp->right == sentinel) {
-                temp->right = node;
-                break;
-            }
-
-            temp = temp->right;
+            p = &temp->right;
 
         } else { /* node->key == temp->key */
 
             sess_id = (ngx_ssl_sess_id_t *) node;
             sess_id_temp = (ngx_ssl_sess_id_t *) temp;
 
-            if (ngx_memn2cmp(sess_id->id, sess_id_temp->id,
-                             (size_t) node->data, (size_t) temp->data)
-                < 0)
-            {
-                if (temp->left == sentinel) {
-                    temp->left = node;
-                    break;
-                }
-
-                temp = temp->left;
-
-            } else {
-
-                if (temp->right == sentinel) {
-                    temp->right = node;
-                    break;
-                }
-
-                temp = temp->right;
-            }
+            p = (ngx_memn2cmp(sess_id->id, sess_id_temp->id,
+                              (size_t) node->data, (size_t) temp->data)
+                 < 0) ? &temp->left : &temp->right;
         }
+
+        if (*p == sentinel) {
+            break;
+        }
+
+        temp = *p;
     }
 
+    *p = node;
     node->parent = temp;
     node->left = sentinel;
     node->right = sentinel;

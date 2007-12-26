@@ -18,8 +18,8 @@ typedef struct {
     socklen_t                       socklen;
     ngx_str_t                       name;
 
-    ngx_uint_t                      current_weight;
-    ngx_uint_t                      weight;
+    ngx_int_t                       current_weight;
+    ngx_int_t                       weight;
 
     ngx_uint_t                      fails;
     time_t                          accessed;
@@ -29,15 +29,16 @@ typedef struct {
 
     ngx_uint_t                      down;          /* unsigned  down:1; */
 
-#if (NGX_SSL)
+#if (NGX_HTTP_SSL)
     ngx_ssl_session_t              *ssl_session;   /* local to a process */
 #endif
 } ngx_http_upstream_rr_peer_t;
 
 
-typedef struct {
-    ngx_uint_t                      current;
+typedef struct ngx_http_upstream_rr_peers_s  ngx_http_upstream_rr_peers_t;
 
+struct ngx_http_upstream_rr_peers_s {
+    ngx_uint_t                      single;        /* unsigned  single:1; */
     ngx_uint_t                      number;
     ngx_uint_t                      last_cached;
 
@@ -46,8 +47,10 @@ typedef struct {
 
     ngx_str_t                      *name;
 
+    ngx_http_upstream_rr_peers_t   *next;
+
     ngx_http_upstream_rr_peer_t     peer[1];
-} ngx_http_upstream_rr_peers_t;
+};
 
 
 typedef struct {
@@ -62,6 +65,8 @@ ngx_int_t ngx_http_upstream_init_round_robin(ngx_conf_t *cf,
     ngx_http_upstream_srv_conf_t *us);
 ngx_int_t ngx_http_upstream_init_round_robin_peer(ngx_http_request_t *r,
     ngx_http_upstream_srv_conf_t *us);
+ngx_int_t ngx_http_upstream_create_round_robin_peer(ngx_http_request_t *r,
+    ngx_http_upstream_resolved_t *ur);
 ngx_int_t ngx_http_upstream_get_round_robin_peer(ngx_peer_connection_t *pc,
     void *data);
 void ngx_http_upstream_free_round_robin_peer(ngx_peer_connection_t *pc,

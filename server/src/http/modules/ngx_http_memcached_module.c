@@ -167,9 +167,9 @@ ngx_http_memcached_handler(ngx_http_request_t *r)
         return NGX_HTTP_NOT_ALLOWED;
     }
 
-    rc = ngx_http_discard_body(r);
+    rc = ngx_http_discard_request_body(r);
 
-    if (rc != NGX_OK && rc != NGX_AGAIN) {
+    if (rc != NGX_OK) {
         return rc;
     }
 
@@ -183,6 +183,8 @@ ngx_http_memcached_handler(ngx_http_request_t *r)
     if (u == NULL) {
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
+
+    u->schema = mlcf->upstream.schema;
 
     u->peer.log = r->connection->log;
     u->peer.log_error = NGX_ERROR_ERR;
@@ -615,8 +617,6 @@ ngx_http_memcached_pass(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
 
     clcf->handler = ngx_http_memcached_handler;
-
-    lcf->upstream.location = clcf->name;
 
     if (clcf->name.data[clcf->name.len - 1] == '/') {
         clcf->auto_redirect = 1;

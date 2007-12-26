@@ -295,7 +295,7 @@ ngx_http_dav_put_handler(ngx_http_request_t *r)
 #if (NGX_WIN32)
 
     if (err == NGX_EEXIST) {
-        if (ngx_win32_rename_file(temp, &path, r->pool) != NGX_ERROR) {
+        if (ngx_win32_rename_file(temp, &path, r->connection->log) == NGX_OK) {
 
             if (ngx_rename_file(temp->data, path.data) != NGX_FILE_ERROR) {
                 goto ok;
@@ -353,9 +353,9 @@ ngx_http_dav_delete_handler(ngx_http_request_t *r)
         return NGX_HTTP_UNSUPPORTED_MEDIA_TYPE;
     }
 
-    rc = ngx_http_discard_body(r);
+    rc = ngx_http_discard_request_body(r);
 
-    if (rc != NGX_OK && rc != NGX_AGAIN) {
+    if (rc != NGX_OK) {
         return rc;
     }
 
@@ -469,9 +469,9 @@ ngx_http_dav_mkcol_handler(ngx_http_request_t *r, ngx_http_dav_loc_conf_t *dlcf)
         return NGX_HTTP_UNSUPPORTED_MEDIA_TYPE;
     }
 
-    rc = ngx_http_discard_body(r);
+    rc = ngx_http_discard_request_body(r);
 
-    if (rc != NGX_OK && rc != NGX_AGAIN) {
+    if (rc != NGX_OK) {
         return rc;
     }
 
@@ -611,9 +611,9 @@ destination_done:
 
 overwrite_done:
 
-    rc = ngx_http_discard_body(r);
+    rc = ngx_http_discard_request_body(r);
 
-    if (rc != NGX_OK && rc != NGX_AGAIN) {
+    if (rc != NGX_OK) {
         return rc;
     }
 
@@ -969,7 +969,7 @@ ngx_http_dav_delete_path(ngx_http_request_t *r, ngx_str_t *path, ngx_uint_t dir)
         tree.alloc = 0;
         tree.log = r->connection->log;
 
-        /* todo: 207 */
+        /* TODO: 207 */
 
         if (ngx_walk_tree(&tree, path) != NGX_OK) {
             return NGX_HTTP_INTERNAL_SERVER_ERROR;

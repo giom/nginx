@@ -13,19 +13,16 @@
 
 #include "XSUB.h"
 
+
 #define ngx_http_perl_set_request(r)                                          \
     r = INT2PTR(ngx_http_request_t *, SvIV((SV *) SvRV(ST(0))))
 
 
-#define ngx_http_perl_set_targ(p, len, z)                                     \
+#define ngx_http_perl_set_targ(p, len)                                        \
                                                                               \
-    sv_upgrade(TARG, SVt_PV);                                                 \
+    SvUPGRADE(TARG, SVt_PV);                                                  \
     SvPOK_on(TARG);                                                           \
-    SvPV_set(TARG, (char *) p);                                               \
-    SvLEN_set(TARG, len + z);                                                 \
-    SvCUR_set(TARG, len);                                                     \
-    SvFAKE_on(TARG);                                                          \
-    SvREADONLY_on(TARG);                                                      \
+    sv_setpvn(TARG, (char *) p, len)
 
 
 static ngx_int_t
@@ -42,8 +39,12 @@ ngx_http_perl_sv2str(pTHX_ ngx_http_request_t *r, ngx_str_t *s, SV *sv)
 
     s->len = len;
 
-    if (SvREADONLY(sv)) {
+    if (SvREADONLY(sv) && SvPOK(sv)) {
         s->data = p;
+
+        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                       "perl sv2str: %08XD \"%V\"", sv->sv_flags, s);
+
         return NGX_OK;
     }
 
@@ -53,6 +54,9 @@ ngx_http_perl_sv2str(pTHX_ ngx_http_request_t *r, ngx_str_t *s, SV *sv)
     }
 
     ngx_memcpy(s->data, p, len);
+
+    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "perl sv2str: %08XD \"%V\"", sv->sv_flags, s);
 
     return NGX_OK;
 }
@@ -165,7 +169,7 @@ uri(r)
     ngx_http_request_t  *r;
 
     ngx_http_perl_set_request(r);
-    ngx_http_perl_set_targ(r->uri.data, r->uri.len, 0);
+    ngx_http_perl_set_targ(r->uri.data, r->uri.len);
 
     ST(0) = TARG;
 
@@ -178,7 +182,7 @@ args(r)
     ngx_http_request_t  *r;
 
     ngx_http_perl_set_request(r);
-    ngx_http_perl_set_targ(r->args.data, r->args.len, 0);
+    ngx_http_perl_set_targ(r->args.data, r->args.len);
 
     ST(0) = TARG;
 
@@ -191,7 +195,7 @@ request_method(r)
     ngx_http_request_t  *r;
 
     ngx_http_perl_set_request(r);
-    ngx_http_perl_set_targ(r->method_name.data, r->method_name.len, 0);
+    ngx_http_perl_set_targ(r->method_name.data, r->method_name.len);
 
     ST(0) = TARG;
 
@@ -205,7 +209,7 @@ remote_addr(r)
 
     ngx_http_perl_set_request(r);
     ngx_http_perl_set_targ(r->connection->addr_text.data,
-                           r->connection->addr_text.len, 1);
+                           r->connection->addr_text.len);
 
     ST(0) = TARG;
 
@@ -259,7 +263,7 @@ header_in(r, key)
             ph = (ngx_table_elt_t **) ((char *) &r->headers_in + hh->offset);
 
             if (*ph) {
-                ngx_http_perl_set_targ((*ph)->value.data, (*ph)->value.len, 0);
+                ngx_http_perl_set_targ((*ph)->value.data, (*ph)->value.len);
 
                 goto done;
             }
@@ -278,7 +282,7 @@ header_in(r, key)
         ph = r->headers_in.cookies.elts;
 
         if (n == 1) {
-            ngx_http_perl_set_targ((*ph)->value.data, (*ph)->value.len, 0);
+            ngx_http_perl_set_targ((*ph)->value.data, (*ph)->value.len);
 
             goto done;
         }
@@ -306,7 +310,7 @@ header_in(r, key)
             *p++ = ';'; *p++ = ' ';
         }
 
-        ngx_http_perl_set_targ(cookie, size, 0);
+        ngx_http_perl_set_targ(cookie, size);
 
         goto done;
     }
@@ -334,7 +338,7 @@ header_in(r, key)
             continue;
         }
 
-        ngx_http_perl_set_targ(h[i].value.data, h[i].value.len, 0);
+        ngx_http_perl_set_targ(h[i].value.data, h[i].value.len);
 
         goto done;
     }
@@ -402,7 +406,7 @@ request_body(r)
         XSRETURN_UNDEF;
     }
 
-    ngx_http_perl_set_targ(r->request_body->bufs->buf->pos, len, 0);
+    ngx_http_perl_set_targ(r->request_body->bufs->buf->pos, len);
 
     ST(0) = TARG;
 
@@ -421,9 +425,20 @@ request_body_file(r)
     }
 
     ngx_http_perl_set_targ(r->request_body->temp_file->file.name.data,
-                           r->request_body->temp_file->file.name.len, 1);
+                           r->request_body->temp_file->file.name.len);
 
     ST(0) = TARG;
+
+
+void
+discard_request_body(r)
+    CODE:
+
+    ngx_http_request_t  *r;
+
+    ngx_http_perl_set_request(r);
+
+    ngx_http_discard_request_body(r);
 
 
 void
@@ -463,8 +478,6 @@ header_out(r, key, value)
         r->headers_out.content_length = header;
     }
 
-    XSRETURN_EMPTY;
-
 
 void
 filename(r)
@@ -491,7 +504,7 @@ filename(r)
 
     done:
 
-    ngx_http_perl_set_targ(ctx->filename.data, ctx->filename.len, 1);
+    ngx_http_perl_set_targ(ctx->filename.data, ctx->filename.len);
 
     ST(0) = TARG;
 
@@ -523,7 +536,7 @@ print(r, ...)
             sv = SvRV(sv);
         }
 
-        if (SvREADONLY(sv)) {
+        if (SvREADONLY(sv) && SvPOK(sv)) {
 
             p = (u_char *) SvPV(sv, len);
 
@@ -591,22 +604,20 @@ print(r, ...)
 
     (void) ngx_http_perl_output(r, b);
 
-    XSRETURN_EMPTY;
-
 
 void
 sendfile(r, filename, offset = -1, bytes = 0)
     CODE:
 
-    ngx_http_request_t       *r;
-    char                     *filename;
-    int                       offset;
-    size_t                    bytes;
-    ngx_fd_t                  fd;
-    ngx_buf_t                *b;
-    ngx_file_info_t           fi;
-    ngx_pool_cleanup_t       *cln;
-    ngx_pool_cleanup_file_t  *clnf;
+    ngx_http_request_t        *r;
+    char                      *filename;
+    int                        offset;
+    size_t                     bytes;
+    ngx_int_t                  rc;
+    ngx_str_t                  path;
+    ngx_buf_t                 *b;
+    ngx_open_file_info_t       of;
+    ngx_http_core_loc_conf_t  *clcf;
 
     ngx_http_perl_set_request(r);
 
@@ -629,14 +640,30 @@ sendfile(r, filename, offset = -1, bytes = 0)
         XSRETURN_EMPTY;
     }
 
-    cln = ngx_pool_cleanup_add(r->pool, sizeof(ngx_pool_cleanup_file_t));
-    if (cln == NULL) {
+    clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+
+    of.test_dir = 0;
+    of.retest = clcf->open_file_cache_retest;
+    of.errors = clcf->open_file_cache_errors;
+    of.events = clcf->open_file_cache_events;
+
+    path.len = ngx_strlen(filename);
+
+    path.data = ngx_pcalloc(r->pool, path.len + 1);
+    if (path.data == NULL) {
         XSRETURN_EMPTY;
     }
 
-    fd = ngx_open_file((u_char *) filename, NGX_FILE_RDONLY, NGX_FILE_OPEN, 0);
+    (void) ngx_cpystrn(path.data, filename, path.len + 1);
 
-    if (fd == NGX_INVALID_FILE) {
+    rc = ngx_open_cached_file(clcf->open_file_cache, &path, &of, r->pool);
+
+    if (rc == NGX_ERROR) {
+
+        if (of.err == 0) {
+            XSRETURN_EMPTY;
+        }
+
         ngx_log_error(NGX_LOG_CRIT, r->connection->log, ngx_errno,
                       ngx_open_file_n " \"%s\" failed", filename);
         XSRETURN_EMPTY;
@@ -647,39 +674,18 @@ sendfile(r, filename, offset = -1, bytes = 0)
     }
 
     if (bytes == 0) {
-        if (ngx_fd_info(fd, &fi) == NGX_FILE_ERROR) {
-            ngx_log_error(NGX_LOG_CRIT, r->connection->log, ngx_errno,
-                          ngx_fd_info_n " \"%s\" failed", filename);
-
-            if (ngx_close_file(fd) == NGX_FILE_ERROR) {
-                ngx_log_error(NGX_LOG_ALERT, r->connection->log, ngx_errno,
-                              ngx_close_file_n " \"%s\" failed", filename);
-            }
-
-            XSRETURN_EMPTY;
-        }
-
-        bytes = ngx_file_size(&fi) - offset;
+        bytes = of.size - offset;
     }
-
-    cln->handler = ngx_pool_cleanup_file;
-    clnf = cln->data;
-
-    clnf->fd = fd;
-    clnf->name = (u_char *) "";
-    clnf->log = r->pool->log;
 
     b->in_file = 1;
 
     b->file_pos = offset;
     b->file_last = offset + bytes;
 
-    b->file->fd = fd;
+    b->file->fd = of.fd;
     b->file->log = r->connection->log;
 
     (void) ngx_http_perl_output(r, b);
-
-    XSRETURN_EMPTY;
 
 
 void
@@ -746,8 +752,6 @@ allow_ranges(r)
 
     r->allow_ranges = 1;
 
-    XSRETURN_EMPTY;
-
 
 void
 unescape(r, text, type = 0)
@@ -778,7 +782,7 @@ unescape(r, text, type = 0)
     ngx_unescape_uri(&dst, &src, len, (ngx_uint_t) type);
     *dst = '\0';
 
-    ngx_http_perl_set_targ(p, dst - p, 1);
+    ngx_http_perl_set_targ(p, dst - p);
 
     ST(0) = TARG;
 
@@ -875,7 +879,7 @@ variable(r, name, value = NULL)
                     XSRETURN_UNDEF;
                 }
 
-                ngx_http_perl_set_targ(v[i].value.data, v[i].value.len, 0);
+                ngx_http_perl_set_targ(v[i].value.data, v[i].value.len);
 
                 goto done;
             }
@@ -919,7 +923,7 @@ variable(r, name, value = NULL)
         XSRETURN_UNDEF;
     }
 
-    ngx_http_perl_set_targ(vv->data, vv->len, 0);
+    ngx_http_perl_set_targ(vv->data, vv->len);
 
     done:
 
@@ -943,8 +947,6 @@ sleep(r, sleep, next)
 
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "perl sleep: %d", ctx->sleep);
-
-    XSRETURN_EMPTY;
 
 
 void
@@ -976,5 +978,3 @@ log_error(r, err, msg)
     p = (u_char *) SvPV(msg, len);
 
     ngx_log_error(NGX_LOG_ERR, r->connection->log, e, "perl: %s", p);
-
-    XSRETURN_EMPTY;
