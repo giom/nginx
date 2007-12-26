@@ -173,13 +173,18 @@ memcached_hash_free_peer(ngx_peer_connection_t *pc, void *data,
 {
   struct memcached_hash_peer *peer = data;
 
-  if (state == 0)
+  if (state & NGX_PEER_FAILED)
     {
-      peer->accessed = ngx_time();
-    }
-  else if (state & NGX_PEER_FAILED)
-    {
-      ++peer->fails;
+      if (peer->server->max_fails > 0)
+        {
+          time_t now = ngx_time();
+          if (now - peer->accessed > peer->server->fail_timeout)
+            peer->fails = 0;
+          ++peer->fails;
+          if (peer->fails == 1 || peer->fails == peer->server->max_fails)
+            peer->accessed = ngx_time();
+        }
+
       if (--pc->tries > 0)
         {
           if (++peer->addr_index == peer->server->naddrs)
