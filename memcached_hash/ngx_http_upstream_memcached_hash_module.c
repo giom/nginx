@@ -109,7 +109,8 @@ memcached_hash_get_peer(ngx_peer_connection_t *pc, void *data)
   return NGX_OK;
 
 fail:
-  pc->tries = 0;
+  /* This is the last try.  */
+  pc->tries = 1;
 
   return NGX_BUSY;
 }
