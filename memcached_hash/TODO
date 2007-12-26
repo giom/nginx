@@ -1,5 +1,3 @@
-- Test work with SSL (maybe we had to save/restore SSL context).
-
 - Add script populate.pl.
 
 - Check key distribution.
