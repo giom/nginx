@@ -192,6 +192,14 @@ memcached_hash_free_peer(ngx_peer_connection_t *pc, void *data,
             peer->addr_index = 0;
         }
     }
+  else if (state & NGX_PEER_NEXT)
+    {
+      /*
+        If memcached gave negative (NOT_FOUND) reply, there's no need
+        to try the same cache though different address.
+      */
+      pc->tries = 0;
+    }
 }
 
 
