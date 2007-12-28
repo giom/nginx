@@ -64,6 +64,7 @@ typedef struct {
 
 
 typedef struct {
+    ngx_str_t                       name;
     ngx_peer_addr_t                *addrs;
     ngx_uint_t                      naddrs;
     ngx_uint_t                      weight;
