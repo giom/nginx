@@ -295,8 +295,8 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
           size_t len, port_len = 0;
           unsigned int crc32, count, j;
 
-          host = server[i].addrs[0].name.data;
-          len = server[i].addrs[0].name.len;
+          host = server[i].name.data;
+          len = server[i].name.len;
 
 #if NGX_HAVE_UNIX_DOMAIN
           if (ngx_strncasecmp(host, "unix:", 5) == 0)
