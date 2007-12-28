@@ -6,7 +6,4 @@
 
 - Write documentation.
 
-- Add dist.pl, test version consistency there, pack patches for nginx
-  into the distribution.
-
 - Add gzip support.
