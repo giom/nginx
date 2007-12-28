@@ -39,7 +39,20 @@ And the you use memcached_cluster in memcached_pass directve:
         }
     }
 
-The order of server directives matters.
+The order of server directives matters.  namespace should not be set.
 
 
 SUPPORT
+
+
+ACKNOWLEDGEMENTS
+
+Development of this module is sponsored by Monashev Co. Ltd.
+
+
+COPYRIGHT AND LICENCE
+
+Copyright (C) 2007 Tomash Brechko.  All rights reserved.
+
+This file is distributed on the same terms as the rest of nginx source
+code.
