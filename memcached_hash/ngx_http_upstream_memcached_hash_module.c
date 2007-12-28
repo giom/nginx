@@ -144,10 +144,12 @@ memcached_hash_find_peer(ngx_peer_connection_t *pc, void *data)
 
       if (memd->ketama_points == 0)
         {
+          unsigned int scaled_total_weight =
+            (memd->total_weight + memd->scale / 2) / memd->scale;
           point = ((point >> 16) & 0x00007fff);
-          point = point % memd->total_weight;
+          point = point % scaled_total_weight;
           point = ((uint64_t) point * CONTINUUM_MAX_POINT
-                   + memd->total_weight / 2) / memd->total_weight;
+                   + scaled_total_weight / 2) / scaled_total_weight;
           /*
             Shift point one step forward to possibly get from the
             border point which belongs to the previous bin.
