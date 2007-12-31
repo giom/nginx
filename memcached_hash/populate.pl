@@ -29,8 +29,10 @@ while (my $line = <$fh>) {
         $conf{ketama_points} = $1 if $line =~ /\bketama_points=(\d+)/;
         $weight_scale = $1 if $line =~ /\bweight_scale=(\d+)/;
     } elsif ($line =~ /^\s*server\s+(\S+)/) {
+        my $addr = $1;
+        $addr =~ s/^unix://;
         my %server;
-        $server{address} = $1;
+        $server{address} = $addr;
         $server{weight} = $1 / $weight_scale if $line =~ /\bweight=(\d+)/;
         push @{$conf{servers}}, \%server;
     } elsif ($line =~ /{/) {
