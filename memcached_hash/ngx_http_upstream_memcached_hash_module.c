@@ -307,7 +307,7 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
       for (i = 0; i < us->servers->nelts; ++i)
         {
           static const char delim = '\0';
-          char *host, *port;
+          u_char *host, *port;
           size_t len, port_len = 0;
           unsigned int crc32, count, j;
 
@@ -315,7 +315,7 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
           len = server[i].name.len;
 
 #if NGX_HAVE_UNIX_DOMAIN
-          if (ngx_strncasecmp(host, "unix:", 5) == 0)
+          if (ngx_strncasecmp(host, (u_char *) "unix:", 5) == 0)
             {
               host += 5;
               len -= 5;
@@ -335,14 +335,14 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
 
           ngx_crc32_init(crc32);
           ngx_crc32_update(&crc32, host, len);
-          ngx_crc32_update(&crc32, (char *) &delim, 1);
+          ngx_crc32_update(&crc32, (u_char *) &delim, 1);
           ngx_crc32_update(&crc32, port, port_len);
 
           count = (memd->ketama_points * server[i].weight
                    + memd->scale / 2) / memd->scale;
           for (j = 0; j < count; ++j)
             {
-              char buf[4];
+              u_char buf[4];
               unsigned int point = crc32, bin;
 
               /*
