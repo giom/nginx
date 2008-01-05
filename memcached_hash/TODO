@@ -1,3 +1,6 @@
 - Comment the code, especially integer computations.
 
 - Add gzip support.
+
+- Add populate.pl to the distribution.  For that nowait push bug
+  should be fixed, and server_versions command should be made public.

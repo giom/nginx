@@ -1,5 +1,7 @@
 #! /usr/bin/perl
 #
+# Copyright (C) 2007-2008 Tomash Brechko.  All rights reserved.
+#
 use warnings;
 use strict;
 
