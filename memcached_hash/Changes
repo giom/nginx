@@ -1,4 +1,8 @@
-Revision history of nginx_memcached_hash module.
+Revision history of ngx_http_upstream_memcached_hash_module.
+
+
+0.01  2008-01-??
+        - first internal release.
 
 
 0.01  2007-12-24

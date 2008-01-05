@@ -1,5 +1,3 @@
 - Comment the code, especially integer computations.
 
-- Write documentation.
-
 - Add gzip support.
