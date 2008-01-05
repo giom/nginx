@@ -31,6 +31,7 @@ while (my $line = <$fh>) {
     } elsif ($line =~ /^\s*server\s+(\S+)/) {
         my $addr = $1;
         $addr =~ s/^unix://;
+        $addr =~ s/;$//;
         my %server;
         $server{address} = $addr;
         $server{weight} = $1 / $weight_scale if $line =~ /\bweight=(\d+)/;
@@ -49,16 +50,16 @@ $conf{nowait} = 1;
 
 my $memd = new Cache::Memcached::Fast(\%conf);
 
-my $version = $memd->server_versions;
-die "No server is running at one of addresses\n"
-    unless @$version == @{$conf{servers}};
-
-
 foreach (@{$conf{servers}}) {
-    print "address => $_->{address}, weight => $_->{weight}\n";
+    print "address => $_->{address}";
+    print ", weight => $_->{weight}" if exists $_->{weight};
+    print "\n";
 }
 print "ketama_points => $conf{ketama_points}\n" if exists $conf{ketama_points};
 
+my $version = $memd->server_versions;
+die "No server is running at one of addresses\n"
+    unless @$version == @{$conf{servers}};
 
 $/ = undef;
 foreach my $file (@ARGV) {
