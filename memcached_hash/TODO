@@ -2,7 +2,7 @@
 
 - Add gzip support.
 
-- Add populate.pl to the distribution.  For that nowait push bug
-  should be fixed, and server_versions command should be made public.
+- Add populate.pl to the distribution.  For that server_versions
+  command should be made public.
 
 - Rename bins to buckets.

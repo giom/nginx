@@ -74,6 +74,3 @@ foreach my $file (@ARGV) {
 
     close($fh);
 }
-
-# Push all pending requests.
-$version = $memd->server_versions;
