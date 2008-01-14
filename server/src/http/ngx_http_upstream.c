@@ -1123,6 +1123,16 @@ ngx_http_upstream_process_header(ngx_event_t *rev)
         }
     }
 
+    if (u->headers_in.status_n == NGX_HTTP_INSUFFICIENT_STORAGE) {
+
+        if (u->peer.tries > 1
+            && u->conf->next_upstream & NGX_HTTP_UPSTREAM_FT_HTTP_507)
+        {
+            ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_HTTP_507);
+            return;
+        }
+    }
+
     if (u->headers_in.status_n >= NGX_HTTP_BAD_REQUEST
         && u->conf->intercept_errors)
     {
@@ -2220,6 +2230,10 @@ ngx_http_upstream_next(ngx_http_request_t *r, ngx_http_upstream_t *u,
 
         case NGX_HTTP_UPSTREAM_FT_HTTP_503:
             status = NGX_HTTP_SERVICE_UNAVAILABLE;
+            break;
+
+        case NGX_HTTP_UPSTREAM_FT_HTTP_507:
+            status = NGX_HTTP_INSUFFICIENT_STORAGE;
             break;
 
         /*
