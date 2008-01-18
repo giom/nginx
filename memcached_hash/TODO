@@ -4,4 +4,4 @@
 
 - Add populate.pl to the distribution.
 
-- Rename bins to buckets.
+- Implement cache of open connections to upstreams.

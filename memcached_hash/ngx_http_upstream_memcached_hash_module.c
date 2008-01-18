@@ -35,9 +35,9 @@ struct memcached_hash_peer
 
 struct memcached_hash
 {
-  struct memcached_hash_continuum *bins;
+  struct memcached_hash_continuum *buckets;
   struct memcached_hash_peer *peers;
-  unsigned int bins_count;
+  unsigned int buckets_count;
   unsigned int peer_count;
   unsigned int total_weight;
   unsigned int ketama_points;
@@ -55,12 +55,12 @@ struct memcached_hash_find_ctx
 
 static
 unsigned int
-memcached_hash_find_bin(struct memcached_hash *memd, unsigned int point)
+memcached_hash_find_bucket(struct memcached_hash *memd, unsigned int point)
 {
   struct memcached_hash_continuum *left, *right;
 
-  left = memd->bins;
-  right = memd->bins + memd->bins_count;
+  left = memd->buckets;
+  right = memd->buckets + memd->buckets_count;
 
   while (left < right)
     {
@@ -70,14 +70,14 @@ memcached_hash_find_bin(struct memcached_hash *memd, unsigned int point)
       else if (middle->point > point)
         right = middle;
       else
-        return (middle - memd->bins);
+        return (middle - memd->buckets);
     }
 
   /* Wrap around.  */
-  if (left == memd->bins + memd->bins_count)
-    left = memd->bins;
+  if (left == memd->buckets + memd->buckets_count)
+    left = memd->buckets;
 
-  return (left - memd->bins);
+  return (left - memd->buckets);
 }
 
 
@@ -124,7 +124,7 @@ memcached_hash_find_peer(ngx_peer_connection_t *pc, void *data)
   struct memcached_hash *memd = find_ctx->memd;
   u_char *key;
   size_t len;
-  unsigned int point, bin, index;
+  unsigned int point, bucket, index;
 
   if (memd->peer_count == 1)
     {
@@ -152,13 +152,13 @@ memcached_hash_find_peer(ngx_peer_connection_t *pc, void *data)
                    + scaled_total_weight / 2) / scaled_total_weight;
           /*
             Shift point one step forward to possibly get from the
-            border point which belongs to the previous bin.
+            border point which belongs to the previous bucket.
           */
           point += 1;
         }
 
-      bin = memcached_hash_find_bin(memd, point);
-      index = memd->bins[bin].index;
+      bucket = memcached_hash_find_bucket(memd, point);
+      index = memd->buckets[bucket].index;
     }
 
   pc->data = &memd->peers[index];
@@ -240,7 +240,7 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
 {
   struct memcached_hash *memd = us->peer.data;
   ngx_http_upstream_server_t *server;
-  unsigned int bins_count, i;
+  unsigned int buckets_count, i;
 
   if (! us->servers)
     return NGX_ERROR;
@@ -266,18 +266,18 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
 
   if (memd->ketama_points == 0)
     {
-      bins_count = us->servers->nelts;
+      buckets_count = us->servers->nelts;
     }
   else
     {
-      bins_count = 0;
+      buckets_count = 0;
       for (i = 0; i < us->servers->nelts; ++i)
-        bins_count += (memd->ketama_points * server[i].weight
-                       + memd->scale / 2) / memd->scale;
+        buckets_count += (memd->ketama_points * server[i].weight
+                          + memd->scale / 2) / memd->scale;
     }
 
-  memd->bins = ngx_palloc(cf->pool, sizeof(*memd->bins) * bins_count);
-  if (! memd->bins)
+  memd->buckets = ngx_palloc(cf->pool, sizeof(*memd->buckets) * buckets_count);
+  if (! memd->buckets)
     return NGX_ERROR;
 
   if (memd->ketama_points == 0)
@@ -290,20 +290,20 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
           total_weight += server[i].weight;
           for (j = 0; j < i; ++j)
             {
-              memd->bins[j].point =
-                (memd->bins[j].point
-                 - ((uint64_t) memd->bins[j].point * server[i].weight
+              memd->buckets[j].point =
+                (memd->buckets[j].point
+                 - ((uint64_t) memd->buckets[j].point * server[i].weight
                     + total_weight / 2) / total_weight);
             }
 
-          memd->bins[i].point = CONTINUUM_MAX_POINT;
-          memd->bins[i].index = i;
+          memd->buckets[i].point = CONTINUUM_MAX_POINT;
+          memd->buckets[i].index = i;
         }
-      memd->bins_count = bins_count;
+      memd->buckets_count = buckets_count;
     }
   else
     {
-      memd->bins_count = 0;
+      memd->buckets_count = 0;
       for (i = 0; i < us->servers->nelts; ++i)
         {
           static const char delim = '\0';
@@ -343,7 +343,7 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
           for (j = 0; j < count; ++j)
             {
               u_char buf[4];
-              unsigned int point = crc32, bin;
+              unsigned int point = crc32, bucket;
 
               /*
                 We want the same result on all platforms, so we
@@ -357,21 +357,21 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
               ngx_crc32_update(&point, buf, 4);
               ngx_crc32_final(point);
 
-              if (memd->bins_count > 0)
+              if (memd->buckets_count > 0)
                 {
-                  bin = memcached_hash_find_bin(memd, point);
+                  bucket = memcached_hash_find_bucket(memd, point);
 
                   /*
                     Check if we wrapped around but actually have new
                     max point.
                   */
-                  if (bin == 0 && point > memd->bins[0].point)
+                  if (bucket == 0 && point > memd->buckets[0].point)
                     {
-                      bin = memd->bins_count;
+                      bucket = memd->buckets_count;
                     }
                   else
                     {
-                      if (point == memd->bins[bin].point)
+                      if (point == memd->buckets[bucket].point)
                         {
                           /*
                             Even if there's a server for the same
@@ -380,24 +380,25 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
                             later.  But we add ours after the first
                             server for not to change key distribution.
                             */
-                          ++bin;
+                          ++bucket;
                         }
 
                       /* Move the tail one position forward.  */
-                      ngx_memmove(memd->bins + bin + 1, memd->bins + bin,
-                                  ((memd->bins_count - bin)
-                                   * sizeof(*memd->bins)));
+                      ngx_memmove(memd->buckets + bucket + 1,
+                                  memd->buckets + bucket,
+                                  ((memd->buckets_count - bucket)
+                                   * sizeof(*memd->buckets)));
                     }
                 }
               else
                 {
-                  bin = 0;
+                  bucket = 0;
                 }
 
-              memd->bins[bin].point = point;
-              memd->bins[bin].index = i;
+              memd->buckets[bucket].point = point;
+              memd->buckets[bucket].index = i;
 
-              ++memd->bins_count;
+              ++memd->buckets_count;
             }
         }
     }
