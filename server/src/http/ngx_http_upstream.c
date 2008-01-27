@@ -1093,6 +1093,45 @@ ngx_http_upstream_process_header(ngx_event_t *rev)
         }
     }
 
+    if (u->headers_in.status_n == NGX_HTTP_BAD_GATEWAY) {
+
+        if (u->peer.tries > 1
+            && u->conf->next_upstream & NGX_HTTP_UPSTREAM_FT_HTTP_502)
+        {
+            ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_HTTP_502);
+            return;
+        }
+    }
+
+    if (u->headers_in.status_n == NGX_HTTP_SERVICE_UNAVAILABLE) {
+
+        if (u->peer.tries > 1
+            && u->conf->next_upstream & NGX_HTTP_UPSTREAM_FT_HTTP_503)
+        {
+            ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_HTTP_503);
+            return;
+        }
+    }
+
+    if (u->headers_in.status_n == NGX_HTTP_GATEWAY_TIME_OUT) {
+
+        if (u->peer.tries > 1
+            && u->conf->next_upstream & NGX_HTTP_UPSTREAM_FT_HTTP_504)
+        {
+            ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_HTTP_504);
+            return;
+        }
+    }
+
+    if (u->headers_in.status_n == NGX_HTTP_INSUFFICIENT_STORAGE) {
+
+        if (u->peer.tries > 1
+            && u->conf->next_upstream & NGX_HTTP_UPSTREAM_FT_HTTP_507)
+        {
+            ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_HTTP_507);
+            return;
+        }
+    }
 
     if (u->headers_in.status_n >= NGX_HTTP_BAD_REQUEST
         && u->conf->intercept_errors)
@@ -2172,6 +2211,7 @@ ngx_http_upstream_next(ngx_http_request_t *r, ngx_http_upstream_t *u,
     } else {
         switch(ft_type) {
 
+        case NGX_HTTP_UPSTREAM_FT_HTTP_504:
         case NGX_HTTP_UPSTREAM_FT_TIMEOUT:
             status = NGX_HTTP_GATEWAY_TIME_OUT;
             break;
@@ -2182,6 +2222,18 @@ ngx_http_upstream_next(ngx_http_request_t *r, ngx_http_upstream_t *u,
 
         case NGX_HTTP_UPSTREAM_FT_HTTP_404:
             status = NGX_HTTP_NOT_FOUND;
+            break;
+
+        case NGX_HTTP_UPSTREAM_FT_HTTP_502:
+            status = NGX_HTTP_BAD_GATEWAY;
+            break;
+
+        case NGX_HTTP_UPSTREAM_FT_HTTP_503:
+            status = NGX_HTTP_SERVICE_UNAVAILABLE;
+            break;
+
+        case NGX_HTTP_UPSTREAM_FT_HTTP_507:
+            status = NGX_HTTP_INSUFFICIENT_STORAGE;
             break;
 
         /*
