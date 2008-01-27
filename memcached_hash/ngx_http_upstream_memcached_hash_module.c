@@ -6,7 +6,7 @@
   This file is distributed on the same terms as the rest of nginx
   source code.
 
-  Version 0.01.
+  Version 0.02.
 */
 
 #include <ngx_config.h>

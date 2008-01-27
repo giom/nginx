@@ -1,4 +1,4 @@
-ngx_http_upstream_memcached_hash_module 0.01
+ngx_http_upstream_memcached_hash_module 0.02
 ============================================
 
 This module is a load balancer for nginx server that is meant to be
