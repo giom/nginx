@@ -15,6 +15,15 @@ CGI script), and then served by nginx from there.
 
 INSTALLATION
 
+The latest release and Git repository are available from
+
+  http://openhack.ru/nginx-patched
+
+If you install both this module and nginx 0.5.x from the
+memcached_hash branch of the Git repo, you don't have to apply any
+patches as described below.
+
+
 All nginx modules are meant to be statically compiled into nginx
 server, so first you have to obtain nginx server source code:
 
@@ -44,11 +53,11 @@ After applying the patches do
       --add-module=/path/to/ngx_http_upstream_memcached_hash_module/
 
 If you already have nginx installed, you'd probably want to also
-specify the configure parameters you used before.  To see what
-arguments were given to configure for currently installed nginx server
-run 'nginx -V'.  At last, do
+specify the configure parameters you have used before.  To see what
+arguments have been given to configure for currently installed nginx
+server, run 'nginx -V'.  At last, do
 
-  make    (or make CFLAGS='-g -O2')
+  make
   make install
 
 This will install nginx server.  Do not forget to restart the server
@@ -159,8 +168,23 @@ Ketama algorithm by using weight_scale while omitting ketama_points
 nginx configuration file.  As of this writing Cache::Memcached
 supports only integer weights and does not support consistent hashing.
 
+Also note that nginx escapes an URI key before sending the request to
+memcached.  As of this writing the transformation is equivalent to the
+Perl code
+
+  use bytes;
+  $uri =~ s/[\x00-\x1f %]/ sprintf "%%%02x", ord $& /ge;
+
+I.e. percent sign ('%'), space (' '), and control characters with the
+codes in the range 0x00--0x1f are replaced with percent sign and two
+digit hexadecimal character code (with a-f in lowercase).  You have to
+escape URI keys the same way before uploading the data to memcached
+server, otherwise nginx won't find them.
+
 
 SUPPORT
+
+http://openhack.ru/nginx-patched - project home.
 
 Send bug reports and feature requests to <tomash.brechko@gmail.com>.
 
