@@ -1,9 +1,13 @@
 Revision history of ngx_http_upstream_memcached_hash_module.
 
 
-0.01  2008-01-??
-        - first internal release.
+0.01  2008-01-27
+        - first official release.
+
+        The hashing is fully compatible with Cache::Memcached::Fast
+        and Cache::Memcached, and thus with any other client that is
+        compatible with C::M.
 
 
-0.01  2007-12-24
+0.00  2007-12-24
         - development started.
