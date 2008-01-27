@@ -12,7 +12,7 @@ PATCHES="$DIR/$DIST"/nginx-patches
 mkdir "$DIST"
 mkdir "$PATCHES"
 
-git format-patch -o "$PATCHES" heads/memcached_hash ^master ../server/
+git format-patch -o "$PATCHES" heads/memcached_hash ^stable ../server/
 
 cp Changes config ngx_http_upstream_memcached_hash_module.c README "$DIST" ||
   exit 1
