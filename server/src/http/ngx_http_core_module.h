@@ -303,6 +303,7 @@ struct ngx_http_core_loc_conf_s {
 
     ngx_uint_t    gzip_http_version;       /* gzip_http_version */
     ngx_uint_t    gzip_proxied;            /* gzip_proxied */
+    ngx_flag_t    gunzip;
 
 #if (NGX_PCRE)
     ngx_array_t  *gzip_disable;            /* gzip_disable */

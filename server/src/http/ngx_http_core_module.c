@@ -537,6 +537,13 @@ static ngx_command_t  ngx_http_core_commands[] = {
       0,
       NULL },
 
+    { ngx_string("gunzip"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_core_loc_conf_t, gunzip),
+      NULL },
+
 #endif
 
       ngx_null_command
@@ -632,6 +639,7 @@ ngx_http_handler(ngx_http_request_t *r)
 
     r->valid_location = 1;
     r->gzip = 0;
+    r->gunzip = 0;
 
     r->write_event_handler = ngx_http_core_run_phases;
     ngx_http_core_run_phases(r);
@@ -2611,6 +2619,7 @@ ngx_http_core_create_loc_conf(ngx_conf_t *cf)
     lcf->gzip_vary = NGX_CONF_UNSET;
     lcf->gzip_http_version = NGX_CONF_UNSET_UINT;
     lcf->gzip_disable = NGX_CONF_UNSET_PTR;
+    lcf->gunzip = NGX_CONF_UNSET;
 #endif
 
     return lcf;
@@ -2803,6 +2812,7 @@ ngx_http_core_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 #if (NGX_HTTP_GZIP)
 
     ngx_conf_merge_value(conf->gzip_vary, prev->gzip_vary, 0);
+    ngx_conf_merge_value(conf->gunzip, prev->gunzip, 0);
     ngx_conf_merge_uint_value(conf->gzip_http_version, prev->gzip_http_version,
                               NGX_HTTP_VERSION_11);
     ngx_conf_merge_bitmask_value(conf->gzip_proxied, prev->gzip_proxied,
