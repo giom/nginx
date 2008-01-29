@@ -384,6 +384,8 @@ found:
 
         if (flags & mlcf->gzip_flag) {
 #if (NGX_HTTP_GZIP)
+            clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+
             if (ngx_http_gzip_ok(r) == NGX_OK) {
                 h = ngx_list_push(&r->headers_out.headers);
                 if (h == NULL) {
@@ -398,8 +400,6 @@ found:
 
                 r->headers_out.content_encoding = h;
 
-                clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
-
                 if (clcf->gzip_vary) {
                     h = ngx_list_push(&r->headers_out.headers);
                     if (h == NULL) {
@@ -413,17 +413,22 @@ found:
                     h->value.data = (u_char *) "Accept-Encoding";
                 }
             } else {
+                if (clcf->gunzip) {
+                    r->gunzip = 1;
+                } else {
 #endif
-              /*
-               * If the client can't accept compressed data we return
-               * 404 in the hope that next upstream will return
-               * uncompressed data.
-               */
-              u->headers_in.status_n = 404;
-              u->state->status = 404;
+                    /*
+                     * If the client can't accept compressed data, and
+                     * automatic decompression is not enabled, we
+                     * return 404 in the hope that the next upstream
+                     * will return uncompressed data.
+                     */
+                    u->headers_in.status_n = 404;
+                    u->state->status = 404;
 
-              return NGX_OK;
+                    return NGX_OK;
 #if (NGX_HTTP_GZIP)
+                }
             }
 #endif
         }
