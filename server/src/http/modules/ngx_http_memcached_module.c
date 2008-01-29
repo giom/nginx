@@ -383,6 +383,7 @@ found:
         mlcf = ngx_http_get_module_loc_conf(r, ngx_http_memcached_module);
 
         if (flags & mlcf->gzip_flag) {
+#if (NGX_HTTP_GZIP)
             if (ngx_http_gzip_ok(r) == NGX_OK) {
                 h = ngx_list_push(&r->headers_out.headers);
                 if (h == NULL) {
@@ -412,6 +413,7 @@ found:
                     h->value.data = (u_char *) "Accept-Encoding";
                 }
             } else {
+#endif
               /*
                * If the client can't accept compressed data we return
                * 404 in the hope that next upstream will return
@@ -421,7 +423,9 @@ found:
               u->state->status = 404;
 
               return NGX_OK;
+#if (NGX_HTTP_GZIP)
             }
+#endif
         }
 
         u->headers_in.status_n = 200;
