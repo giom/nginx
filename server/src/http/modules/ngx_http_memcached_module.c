@@ -13,7 +13,7 @@
 typedef struct {
     ngx_http_upstream_conf_t   upstream;
     ngx_int_t                  index;
-    uint32_t                   gzip_flag;
+    ngx_uint_t                 gzip_flag;
 } ngx_http_memcached_loc_conf_t;
 
 
