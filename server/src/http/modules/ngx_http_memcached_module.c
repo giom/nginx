@@ -13,6 +13,7 @@
 typedef struct {
     ngx_http_upstream_conf_t   upstream;
     ngx_int_t                  index;
+    ngx_uint_t                 gzip_flag;
 } ngx_http_memcached_loc_conf_t;
 
 
@@ -98,6 +99,13 @@ static ngx_command_t  ngx_http_memcached_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_memcached_loc_conf_t, upstream.next_upstream),
       &ngx_http_memcached_next_upstream_masks },
+
+    { ngx_string("memcached_gzip_flag"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_memcached_loc_conf_t, gzip_flag),
+      NULL },
 
     { ngx_string("memcached_upstream_max_fails"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
@@ -297,10 +305,14 @@ ngx_http_memcached_reinit_request(ngx_http_request_t *r)
 static ngx_int_t
 ngx_http_memcached_process_header(ngx_http_request_t *r)
 {
-    u_char                    *p, *len;
+    u_char                    *p, *beg;
     ngx_str_t                  line;
     ngx_http_upstream_t       *u;
     ngx_http_memcached_ctx_t  *ctx;
+    ngx_http_memcached_loc_conf_t  *mlcf;
+    uint32_t                   flags;
+    ngx_table_elt_t           *h;
+    ngx_http_core_loc_conf_t  *clcf;
 
     u = r->upstream;
 
@@ -345,29 +357,80 @@ found:
             goto no_valid;
         }
 
-        /* skip flags */
+        beg = p;
 
-        while (*p) {
-            if (*p++ == ' ') {
-                goto length;
-            }
+        while (*p && *p++ != ' ') { /* void */ }
+
+        if (! *p) {
+            goto no_valid;
         }
 
-        goto no_valid;
+        flags = ngx_atoof(beg, p - beg - 1);
 
-    length:
-
-        len = p;
+        beg = p;
 
         while (*p && *p++ != CR) { /* void */ }
 
-        r->headers_out.content_length_n = ngx_atoof(len, p - len - 1);
+        r->headers_out.content_length_n = ngx_atoof(beg, p - beg - 1);
         if (r->headers_out.content_length_n == -1) {
             ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                           "memcached sent invalid length in response \"%V\" "
                           "for key \"%V\"",
                           &line, &ctx->key);
             return NGX_HTTP_UPSTREAM_INVALID_HEADER;
+        }
+
+        mlcf = ngx_http_get_module_loc_conf(r, ngx_http_memcached_module);
+
+        if (flags & mlcf->gzip_flag) {
+#if (NGX_HTTP_GZIP)
+            clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+
+            if (ngx_http_gzip_ok(r) == NGX_OK) {
+                h = ngx_list_push(&r->headers_out.headers);
+                if (h == NULL) {
+                    return NGX_ERROR;
+                }
+
+                h->hash = 1;
+                h->key.len = sizeof("Content-Encoding") - 1;
+                h->key.data = (u_char *) "Content-Encoding";
+                h->value.len = sizeof("gzip") - 1;
+                h->value.data = (u_char *) "gzip";
+
+                r->headers_out.content_encoding = h;
+
+                if (clcf->gzip_vary) {
+                    h = ngx_list_push(&r->headers_out.headers);
+                    if (h == NULL) {
+                        return NGX_ERROR;
+                    }
+
+                    h->hash = 1;
+                    h->key.len = sizeof("Vary") - 1;
+                    h->key.data = (u_char *) "Vary";
+                    h->value.len = sizeof("Accept-Encoding") - 1;
+                    h->value.data = (u_char *) "Accept-Encoding";
+                }
+            } else {
+                if (clcf->gunzip) {
+                    r->gunzip = 1;
+                } else {
+#endif
+                    /*
+                     * If the client can't accept compressed data, and
+                     * automatic decompression is not enabled, we
+                     * return 404 in the hope that the next upstream
+                     * will return uncompressed data.
+                     */
+                    u->headers_in.status_n = 404;
+                    u->state->status = 404;
+
+                    return NGX_OK;
+#if (NGX_HTTP_GZIP)
+                }
+            }
+#endif
         }
 
         u->headers_in.status_n = 200;
@@ -532,6 +595,8 @@ ngx_http_memcached_create_loc_conf(ngx_conf_t *cf)
 
     conf->upstream.buffer_size = NGX_CONF_UNSET_SIZE;
 
+    conf->gzip_flag = NGX_CONF_UNSET_UINT;
+
     /* the hardcoded values */
     conf->upstream.cyclic_temp_file = 0;
     conf->upstream.buffering = 0;
@@ -574,6 +639,9 @@ ngx_http_memcached_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
                               (NGX_CONF_BITMASK_SET
                                |NGX_HTTP_UPSTREAM_FT_ERROR
                                |NGX_HTTP_UPSTREAM_FT_TIMEOUT));
+
+    ngx_conf_merge_uint_value(conf->gzip_flag,
+                              prev->gzip_flag, 0);
 
     if (conf->upstream.next_upstream & NGX_HTTP_UPSTREAM_FT_OFF) {
         conf->upstream.next_upstream = NGX_CONF_BITMASK_SET
