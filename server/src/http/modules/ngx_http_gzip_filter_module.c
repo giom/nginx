@@ -544,25 +544,32 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
             ctx->redo = 0;
 
-            if (ctx->flush == Z_SYNC_FLUSH
-                && ctx->out_buf->last > ctx->out_buf->pos) {
+            if (ctx->flush == Z_SYNC_FLUSH) {
 
-                ctx->zstream.avail_out = 0;
                 ctx->out_buf->flush = 1;
                 ctx->flush = Z_NO_FLUSH;
 
-                cl = ngx_alloc_chain_link(r->pool);
-                if (cl == NULL) {
-                    ngx_http_gzip_error(ctx);
-                    return NGX_ERROR;
+                /*
+                 * On decompression there might be not enough input
+                 * data to produce any output data.
+                 */
+                if (ctx->out_buf->last > ctx->out_buf->pos) {
+
+                    ctx->zstream.avail_out = 0;
+
+                    cl = ngx_alloc_chain_link(r->pool);
+                    if (cl == NULL) {
+                        ngx_http_gzip_error(ctx);
+                        return NGX_ERROR;
+                    }
+
+                    cl->buf = ctx->out_buf;
+                    cl->next = NULL;
+                    *ctx->last_out = cl;
+                    ctx->last_out = &cl->next;
+
+                    break;
                 }
-
-                cl->buf = ctx->out_buf;
-                cl->next = NULL;
-                *ctx->last_out = cl;
-                ctx->last_out = &cl->next;
-
-                break;
             }
 
             if (rc == Z_STREAM_END) {
