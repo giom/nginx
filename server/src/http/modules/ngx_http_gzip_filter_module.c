@@ -575,7 +575,6 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 } else {
                     ctx->zout = ctx->zstream.total_out;
 
-                    r->gunzip = 0;
                     rc = inflateEnd(&ctx->zstream);
                 }
 
@@ -646,6 +645,7 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 #endif
                 } else {
                     ctx->out_buf->last_buf = 1;
+                    r->gunzip = 0;
                 }
 
                 ctx->zstream.avail_in = 0;
