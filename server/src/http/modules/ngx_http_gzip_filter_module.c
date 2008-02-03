@@ -318,10 +318,10 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     conf = ngx_http_get_module_loc_conf(r, ngx_http_gzip_filter_module);
 
     if (ctx->preallocated == NULL) {
-        wbits = conf->wbits;
+        wbits = (!r->gunzip ? conf->wbits : 15);
         memlevel = conf->memlevel;
 
-        if (ctx->length > 0) {
+        if (!r->gunzip && ctx->length > 0) {
 
             /* the actual zlib window size is smaller by 262 bytes */
 
