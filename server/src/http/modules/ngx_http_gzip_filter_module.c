@@ -318,10 +318,10 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     conf = ngx_http_get_module_loc_conf(r, ngx_http_gzip_filter_module);
 
     if (ctx->preallocated == NULL) {
-        wbits = conf->wbits;
+        wbits = (!r->gunzip ? conf->wbits : 15);
         memlevel = conf->memlevel;
 
-        if (ctx->length > 0) {
+        if (!r->gunzip && ctx->length > 0) {
 
             /* the actual zlib window size is smaller by 262 bytes */
 
@@ -542,47 +542,34 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
             ctx->out_buf->last = ctx->zstream.next_out;
 
-            if (ctx->zstream.avail_out == 0) {
-
-                /* zlib wants to output some more gzipped data */
-
-                cl = ngx_alloc_chain_link(r->pool);
-                if (cl == NULL) {
-                    ngx_http_gzip_error(ctx);
-                    return NGX_ERROR;
-                }
-
-                cl->buf = ctx->out_buf;
-                cl->next = NULL;
-                *ctx->last_out = cl;
-                ctx->last_out = &cl->next;
-
-                ctx->redo = 1;
-
-                continue;
-            }
-
             ctx->redo = 0;
 
-            if (ctx->flush == Z_SYNC_FLUSH
-                && ctx->out_buf->last > ctx->out_buf->pos) {
+            if (ctx->flush == Z_SYNC_FLUSH) {
 
-                ctx->zstream.avail_out = 0;
                 ctx->out_buf->flush = 1;
                 ctx->flush = Z_NO_FLUSH;
 
-                cl = ngx_alloc_chain_link(r->pool);
-                if (cl == NULL) {
-                    ngx_http_gzip_error(ctx);
-                    return NGX_ERROR;
+                /*
+                 * On decompression there might be not enough input
+                 * data to produce any output data.
+                 */
+                if (ctx->out_buf->last > ctx->out_buf->pos) {
+
+                    ctx->zstream.avail_out = 0;
+
+                    cl = ngx_alloc_chain_link(r->pool);
+                    if (cl == NULL) {
+                        ngx_http_gzip_error(ctx);
+                        return NGX_ERROR;
+                    }
+
+                    cl->buf = ctx->out_buf;
+                    cl->next = NULL;
+                    *ctx->last_out = cl;
+                    ctx->last_out = &cl->next;
+
+                    break;
                 }
-
-                cl->buf = ctx->out_buf;
-                cl->next = NULL;
-                *ctx->last_out = cl;
-                ctx->last_out = &cl->next;
-
-                break;
             }
 
             if (rc == Z_STREAM_END) {
@@ -595,7 +582,6 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 } else {
                     ctx->zout = ctx->zstream.total_out;
 
-                    r->gunzip = 0;
                     rc = inflateEnd(&ctx->zstream);
                 }
 
@@ -666,6 +652,7 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 #endif
                 } else {
                     ctx->out_buf->last_buf = 1;
+                    r->gunzip = 0;
                 }
 
                 ctx->zstream.avail_in = 0;
@@ -676,6 +663,26 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 r->connection->buffered &= ~NGX_HTTP_GZIP_BUFFERED;
 
                 break;
+            }
+
+            if (ctx->zstream.avail_out == 0) {
+
+                /* zlib wants to output some more gzipped data */
+
+                cl = ngx_alloc_chain_link(r->pool);
+                if (cl == NULL) {
+                    ngx_http_gzip_error(ctx);
+                    return NGX_ERROR;
+                }
+
+                cl->buf = ctx->out_buf;
+                cl->next = NULL;
+                *ctx->last_out = cl;
+                ctx->last_out = &cl->next;
+
+                ctx->redo = 1;
+
+                continue;
             }
 
             if (conf->no_buffer && ctx->in == NULL) {
