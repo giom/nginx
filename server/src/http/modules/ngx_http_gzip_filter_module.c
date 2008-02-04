@@ -308,6 +308,7 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     ngx_chain_t           *cl, out;
     ngx_http_gzip_ctx_t   *ctx;
     ngx_http_gzip_conf_t  *conf;
+    const char            *method = (r->gunzip ? "inflate" : "deflate");
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_gzip_filter_module);
 
@@ -365,7 +366,7 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
         if (rc != Z_OK) {
             ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0,
-                          "deflateInit2() failed: %d", rc);
+                          "%sInit2() failed: %d", method, rc);
             ngx_http_gzip_error(ctx);
             return NGX_ERROR;
         }
@@ -495,7 +496,7 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             }
 
 
-            /* is there a space for the gzipped data ? */
+            /* is there a space for the output data ? */
 
             if (ctx->zstream.avail_out == 0) {
 
@@ -524,8 +525,9 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 ctx->zstream.avail_out = conf->bufs.size;
             }
 
-            ngx_log_debug6(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                         "deflate in: ni:%p no:%p ai:%ud ao:%ud fl:%d redo:%d",
+            ngx_log_debug7(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                         "%s in: ni:%p no:%p ai:%ud ao:%ud fl:%d redo:%d",
+                         method,
                          ctx->zstream.next_in, ctx->zstream.next_out,
                          ctx->zstream.avail_in, ctx->zstream.avail_out,
                          ctx->flush, ctx->redo);
@@ -538,20 +540,21 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
             if (rc != Z_OK && rc != Z_STREAM_END) {
                 ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0,
-                              "deflate() failed: %d, %d", ctx->flush, rc);
+                              "%s() failed: %d, %d", method, ctx->flush, rc);
                 ngx_http_gzip_error(ctx);
                 return NGX_ERROR;
             }
 
-            ngx_log_debug5(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                           "deflate out: ni:%p no:%p ai:%ud ao:%ud rc:%d",
+            ngx_log_debug6(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                           "%s out: ni:%p no:%p ai:%ud ao:%ud rc:%d",
+                           method,
                            ctx->zstream.next_in, ctx->zstream.next_out,
                            ctx->zstream.avail_in, ctx->zstream.avail_out,
                            rc);
 
-            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                           "gzip in_buf:%p pos:%p",
-                           ctx->in_buf, ctx->in_buf->pos);
+            ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                           "%s in_buf:%p pos:%p",
+                           method, ctx->in_buf, ctx->in_buf->pos);
 
 
             if (ctx->zstream.next_in) {
@@ -609,7 +612,7 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
                 if (rc != Z_OK) {
                     ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0,
-                                  "deflateEnd() failed: %d", rc);
+                                  "%sEnd() failed: %d", method, rc);
                     ngx_http_gzip_error(ctx);
                     return NGX_ERROR;
                 }
