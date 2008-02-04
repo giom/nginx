@@ -625,10 +625,17 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                     return NGX_ERROR;
                 }
 
-                cl->buf = ctx->out_buf;
-                cl->next = NULL;
-                *ctx->last_out = cl;
-                ctx->last_out = &cl->next;
+                /*
+                 * On decompression we could already output everything
+                 * under (ctx->flush == Z_SYNC_FLUSH), so we test here
+                 * that the buffer is not empty.
+                 */
+                if (!r->gunzip || ctx->out_buf->last > ctx->out_buf->pos) {
+                    cl->buf = ctx->out_buf;
+                    cl->next = NULL;
+                    *ctx->last_out = cl;
+                    ctx->last_out = &cl->next;
+                }
 
                 if (!r->gunzip) {
                     if (ctx->zstream.avail_out >= 8) {
