@@ -455,7 +455,29 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 /**/
 
                 if (ctx->in_buf->last_buf) {
-                    ctx->flush = Z_FINISH;
+                    /*
+                     * We use Z_BLOCK below for the following reason:
+                     * if we would use Z_FINISH, then decompression
+                     * may return Z_BUF_ERROR, meaning there wasn't
+                     * enough room for decompressed data.  This error
+                     * is not fatal according to zlib.h, however
+                     * ignoring it is dangerous and may mask real
+                     * bugs.  For instance, sometimes completely empty
+                     * last buffer is passed to this filter, and
+                     * decompression would enter the infinite loop: no
+                     * progress is possible because input is void and
+                     * Z_BUF_ERROR is ignored.  We can't use
+                     * Z_NO_FLUSH, because it will never return
+                     * Z_STREAM_END.  We can't use Z_SYNC_FLUSH,
+                     * because it has a special meaning.  So we use
+                     * Z_BLOCK, which eventually would return
+                     * Z_STREAM_END.
+                     *
+                     * Perhaps the above is also true for compression,
+                     * but right now we won't try to change the old
+                     * behaviour.
+                     */
+                    ctx->flush = (!r->gunzip ? Z_FINISH : Z_BLOCK);
 
                 } else if (ctx->in_buf->flush) {
                     ctx->flush = Z_SYNC_FLUSH;
@@ -514,7 +536,7 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 rc = inflate(&ctx->zstream, ctx->flush);
             }
 
-            if (rc != Z_OK && rc != Z_STREAM_END && rc != Z_BUF_ERROR) {
+            if (rc != Z_OK && rc != Z_STREAM_END) {
                 ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0,
                               "deflate() failed: %d, %d", ctx->flush, rc);
                 ngx_http_gzip_error(ctx);
