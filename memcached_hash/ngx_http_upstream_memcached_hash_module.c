@@ -17,6 +17,9 @@
 #define CONTINUUM_MAX_POINT  0xffffffffU
 
 
+static ngx_str_t memcached_ns = ngx_string("memcached_namespace");
+
+
 struct memcached_hash_continuum
 {
   unsigned int point;
@@ -42,6 +45,7 @@ struct memcached_hash
   unsigned int total_weight;
   unsigned int ketama_points;
   unsigned int scale;
+  ngx_int_t ns_index;
 };
 
 
@@ -49,7 +53,7 @@ struct memcached_hash_find_ctx
 {
   struct memcached_hash *memd;
   ngx_http_upstream_server_t *server;
-  ngx_chain_t **request_bufs;
+  ngx_http_request_t *request;
 };
 
 
@@ -132,13 +136,22 @@ memcached_hash_find_peer(ngx_peer_connection_t *pc, void *data)
     }
   else
     {
+      ngx_chain_t *request_bufs = find_ctx->request->upstream->request_bufs;
+      ngx_http_variable_value_t *ns_vv =
+        ngx_http_get_indexed_variable(find_ctx->request, memd->ns_index);
+
       /*
         We take the key directly from request_buf, because there it is
         in the escaped form that will be seen by memcached server.
       */
-      key = (*find_ctx->request_bufs)->buf->start + (sizeof("get ") - 1);
-      len = (((*find_ctx->request_bufs)->buf->last - key)
-             - (sizeof("\r\n") - 1));
+      key = request_bufs->buf->start + (sizeof("get ") - 1);
+      if (ns_vv && ! ns_vv->not_found && ns_vv->len != 0)
+        {
+          key += ns_vv->len + 2 * ngx_escape_uri(NULL, ns_vv->data, ns_vv->len,
+                                                 NGX_ESCAPE_MEMCACHED);
+        }
+        
+      len = request_bufs->buf->last - key - (sizeof("\r\n") - 1);
 
       point = ngx_crc32_long(key, len);
 
@@ -217,7 +230,7 @@ memcached_hash_init_peer(ngx_http_request_t *r,
   if (! find_ctx)
     return NGX_ERROR;
   find_ctx->memd = memd;
-  find_ctx->request_bufs = &r->upstream->request_bufs;
+  find_ctx->request = r;
   find_ctx->server = us->servers->elts;
 
   r->upstream->peer.free = memcached_hash_free_peer;
@@ -453,6 +466,11 @@ memcached_hash(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
   memd->ketama_points = ketama_points;
   memd->scale = scale;
+  memd->ns_index = ngx_http_get_variable_index(cf, &memcached_ns);
+
+  if (memd->ns_index == NGX_ERROR) {
+      return NGX_CONF_ERROR;
+  }
 
   uscf->peer.data = memd;
 
