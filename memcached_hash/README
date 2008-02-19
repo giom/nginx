@@ -84,6 +84,7 @@ memcached_cluster in memcached_pass directive:
   server {
       location / {
           set             $memcached_key   "$uri$is_args$args";
+          set             $memcached_namespace   "prefix";
           memcached_pass  memcached_cluster;
           error_page      404 502 504 = @fallback;
       }
@@ -167,6 +168,19 @@ Ketama algorithm by using weight_scale while omitting ketama_points
 (or setting it to zero) in both Cache::Memcached::Fast constructor and
 nginx configuration file.  As of this writing Cache::Memcached
 supports only integer weights and does not support consistent hashing.
+
+If the client uses a namespace, i.e. constructor has
+
+  namespace => 'prefix',
+
+then you have to set $memcached_namespace variable in nginx
+configuration file:
+
+  set  $memcached_namespace  "prefix";
+
+Note that this is not the same as prepending prefix to $memcached_key:
+namespace prefix is not hashed when the key is hashed to decide which
+memcached server to talk to.
 
 Also note that nginx escapes an URI key before sending the request to
 memcached.  As of this writing the transformation is equivalent to the
