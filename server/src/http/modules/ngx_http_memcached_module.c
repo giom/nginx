@@ -13,6 +13,7 @@
 typedef struct {
     ngx_http_upstream_conf_t   upstream;
     ngx_int_t                  index;
+    ngx_int_t                  ns_index;
 } ngx_http_memcached_loc_conf_t;
 
 
@@ -149,6 +150,7 @@ ngx_module_t  ngx_http_memcached_module = {
 
 
 static ngx_str_t  ngx_http_memcached_key = ngx_string("memcached_key");
+static ngx_str_t  ngx_http_memcached_ns = ngx_string("memcached_namespace");
 
 
 #define NGX_HTTP_MEMCACHED_END   (sizeof(ngx_http_memcached_end) - 1)
@@ -226,11 +228,11 @@ static ngx_int_t
 ngx_http_memcached_create_request(ngx_http_request_t *r)
 {
     size_t                          len;
-    uintptr_t                       escape;
+    uintptr_t                       escape, ns_escape = 0;
     ngx_buf_t                      *b;
     ngx_chain_t                    *cl;
     ngx_http_memcached_ctx_t       *ctx;
-    ngx_http_variable_value_t      *vv;
+    ngx_http_variable_value_t      *vv, *ns_vv;
     ngx_http_memcached_loc_conf_t  *mlcf;
 
     mlcf = ngx_http_get_module_loc_conf(r, ngx_http_memcached_module);
@@ -245,7 +247,15 @@ ngx_http_memcached_create_request(ngx_http_request_t *r)
 
     escape = 2 * ngx_escape_uri(NULL, vv->data, vv->len, NGX_ESCAPE_MEMCACHED);
 
-    len = sizeof("get ") - 1 + vv->len + escape + sizeof(CRLF) - 1;
+    ns_vv = ngx_http_get_indexed_variable(r, mlcf->ns_index);
+
+    if (ns_vv != NULL && !ns_vv->not_found && ns_vv->len != 0) {
+        ns_escape = 2 * ngx_escape_uri(NULL, ns_vv->data,
+                                       ns_vv->len, NGX_ESCAPE_MEMCACHED);
+    }
+
+    len = sizeof("get ") - 1 + ns_vv->len + ns_escape
+                             + vv->len + escape + sizeof(CRLF) - 1;
 
     b = ngx_create_temp_buf(r->pool, len);
     if (b == NULL) {
@@ -267,6 +277,16 @@ ngx_http_memcached_create_request(ngx_http_request_t *r)
     ctx = ngx_http_get_module_ctx(r, ngx_http_memcached_module);
 
     ctx->key.data = b->last;
+
+    if (ns_vv != NULL && !ns_vv->not_found && ns_vv->len != 0) {
+        if (ns_escape == 0) {
+            b->last = ngx_copy(b->last, ns_vv->data, ns_vv->len);
+        } else {
+            b->last = (u_char *) ngx_escape_uri(b->last, ns_vv->data,
+                                                ns_vv->len,
+                                                NGX_ESCAPE_MEMCACHED);
+        }
+    }
 
     if (escape == 0) {
         b->last = ngx_copy(b->last, vv->data, vv->len);
@@ -524,6 +544,7 @@ ngx_http_memcached_create_loc_conf(ngx_conf_t *cf)
      *     conf->upstream.location = NULL;
      *
      *     conf->index = 0;
+     *     conf->ns_index = 0;
      */
 
     conf->upstream.connect_timeout = NGX_CONF_UNSET_MSEC;
@@ -625,6 +646,12 @@ ngx_http_memcached_pass(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     lcf->index = ngx_http_get_variable_index(cf, &ngx_http_memcached_key);
 
     if (lcf->index == NGX_ERROR) {
+        return NGX_CONF_ERROR;
+    }
+
+    lcf->ns_index = ngx_http_get_variable_index(cf, &ngx_http_memcached_ns);
+
+    if (lcf->ns_index == NGX_ERROR) {
         return NGX_CONF_ERROR;
     }
 
