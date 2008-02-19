@@ -1,7 +1,3 @@
-- Comment the code, especially integer computations.
-
-- Add gzip support.
-
 - Add populate.pl to the distribution.
 
 - Implement cache of open connections to upstreams.

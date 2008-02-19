@@ -1,6 +1,21 @@
 Revision history of ngx_http_upstream_memcached_hash_module.
 
 
+0.02  2008-02-19
+        - add support for $memcached_namespace variable.
+
+        If Cache::Memcached::Fast uses
+
+           namespace => 'prefix',
+
+        then nginx configuration file should have
+
+          set $memcached_namespace "prefix";
+
+        This is not the same as prepending "prefix" to $memcached_key:
+        namespace prefix should not be hashed.
+
+
 0.01  2008-01-27
         - first official release.
 
