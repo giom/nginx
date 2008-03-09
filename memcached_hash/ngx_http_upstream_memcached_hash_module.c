@@ -6,7 +6,7 @@
   This file is distributed on the same terms as the rest of nginx
   source code.
 
-  Version 0.02.
+  Version 0.03.
 */
 
 #include <ngx_config.h>
@@ -70,11 +70,21 @@ memcached_hash_find_bucket(struct memcached_hash *memd, unsigned int point)
     {
       struct memcached_hash_continuum *middle = left + (right - left) / 2;
       if (middle->point < point)
-        left = middle + 1;
+        {
+          left = middle + 1;
+        }
       else if (middle->point > point)
-        right = middle;
+        {
+          right = middle;
+        }
       else
-        return (middle - memd->buckets);
+        {
+          /* Find the first point for this value.  */
+          while (middle != memd->buckets && (middle - 1)->point == point)
+            --middle;
+
+          return (middle - memd->buckets);
+        }
     }
 
   /* Wrap around.  */
