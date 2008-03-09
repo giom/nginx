@@ -1,7 +1,7 @@
 /*
   Copyright (C) 2007-2008 Tomash Brechko.  All rights reserved.
 
-  Development of this module is sponsored by Monashev Co. Ltd.
+  Development of this module was sponsored by Monashev Co. Ltd.
 
   This file is distributed on the same terms as the rest of nginx
   source code.
@@ -394,23 +394,25 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
                     }
                   else
                     {
-                      if (point == memd->buckets[bucket].point)
-                        {
-                          /*
-                            Even if there's a server for the same
-                            point already, we have to add ours,
-                            because the first one may be removed
-                            later.  But we add ours after the first
-                            server for not to change key distribution.
-                            */
-                          ++bucket;
-                        }
+                      /*
+                        Even if there's a server for the same point
+                        already, we have to add ours, because the
+                        first one may be removed later.  But we add
+                        ours after the first server for not to change
+                        key distribution.
+                      */
+                      while (bucket != memd->buckets_count
+                             && memd->buckets[bucket].point == point)
+                        ++bucket;
 
                       /* Move the tail one position forward.  */
-                      ngx_memmove(memd->buckets + bucket + 1,
-                                  memd->buckets + bucket,
-                                  ((memd->buckets_count - bucket)
-                                   * sizeof(*memd->buckets)));
+                      if (bucket != memd->buckets_count)
+                        {
+                          ngx_memmove(memd->buckets + bucket + 1,
+                                      memd->buckets + bucket,
+                                      (memd->buckets_count - bucket)
+                                      * sizeof(*memd->buckets));
+                        }
                     }
                 }
               else
