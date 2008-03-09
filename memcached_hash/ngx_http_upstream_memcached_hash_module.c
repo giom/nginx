@@ -1,7 +1,7 @@
 /*
   Copyright (C) 2007-2008 Tomash Brechko.  All rights reserved.
 
-  Development of this module is sponsored by Monashev Co. Ltd.
+  Development of this module was sponsored by Monashev Co. Ltd.
 
   This file is distributed on the same terms as the rest of nginx
   source code.
