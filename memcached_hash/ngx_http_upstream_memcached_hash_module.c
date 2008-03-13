@@ -169,7 +169,7 @@ memcached_hash_find_peer(ngx_peer_connection_t *pc, void *data)
         {
           unsigned int scaled_total_weight =
             (memd->total_weight + memd->scale / 2) / memd->scale;
-          point = ((point >> 16) & 0x00007fff);
+          point = ((point >> 16) & 0x00007fffU);
           point = point % scaled_total_weight;
           point = ((uint64_t) point * CONTINUUM_MAX_POINT
                    + scaled_total_weight / 2) / scaled_total_weight;
