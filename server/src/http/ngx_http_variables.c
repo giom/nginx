@@ -1327,6 +1327,15 @@ ngx_http_variables_add_core_vars(ngx_conf_t *cf)
 }
 
 
+static ngx_int_t
+ngx_http_optional_variable(ngx_http_request_t *r,
+    ngx_http_variable_value_t *v, uintptr_t data)
+{
+    *v = ngx_http_variable_null_value;
+    return NGX_OK;
+}
+
+
 ngx_int_t
 ngx_http_variables_init_vars(ngx_conf_t *cf)
 {
@@ -1384,6 +1393,12 @@ ngx_http_variables_init_vars(ngx_conf_t *cf)
             v[i].get_handler = ngx_http_upstream_header_variable;
             v[i].data = (uintptr_t) &v[i].name;
             v[i].flags = NGX_HTTP_VAR_NOCACHEABLE;
+
+            continue;
+        }
+
+        if (ngx_strncmp(v[i].name.data, "memcached_namespace", 19) == 0) {
+            v[i].get_handler = ngx_http_optional_variable;
 
             continue;
         }

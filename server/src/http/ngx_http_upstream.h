@@ -24,6 +24,9 @@
 #define NGX_HTTP_UPSTREAM_FT_HTTP_404        0x00000040
 #define NGX_HTTP_UPSTREAM_FT_BUSY_LOCK       0x00000080
 #define NGX_HTTP_UPSTREAM_FT_MAX_WAITING     0x00000100
+#define NGX_HTTP_UPSTREAM_FT_HTTP_502        0x00000200
+#define NGX_HTTP_UPSTREAM_FT_HTTP_504        0x00000400
+#define NGX_HTTP_UPSTREAM_FT_HTTP_507        0x00000800
 #define NGX_HTTP_UPSTREAM_FT_NOLIVE          0x40000000
 #define NGX_HTTP_UPSTREAM_FT_OFF             0x80000000
 
@@ -65,6 +68,7 @@ typedef struct {
 
 
 typedef struct {
+    ngx_str_t                       name;
     ngx_peer_addr_t                *addrs;
     ngx_uint_t                      naddrs;
     ngx_uint_t                      weight;

@@ -63,6 +63,7 @@ typedef struct {
 #define ngx_memzero(buf, n)       (void) memset(buf, 0, n)
 #define ngx_memset(buf, c, n)     (void) memset(buf, c, n)
 
+#define ngx_memmove(dst, src, n)  (void) memmove(dst, src, n)
 
 #if (NGX_MEMCPY_LIMIT)
 

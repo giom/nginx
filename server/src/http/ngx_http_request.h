@@ -428,6 +428,7 @@ struct ngx_http_request_s {
     unsigned                          subrequest_in_memory:1;
 
     unsigned                          gzip:2;
+    unsigned                          gunzip:1;
 
     unsigned                          proxy:1;
     unsigned                          bypass_cache:1;

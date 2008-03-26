@@ -1,0 +1,216 @@
+ngx_http_upstream_memcached_hash_module 0.03
+============================================
+
+This module is a load balancer for nginx server that is meant to be
+used together with Cache::Memcached::Fast Perl module (or its ancestor
+Cache::Memcached).  It distributes requests among several memcached
+servers in a way consistent with the named Perl modules.  I.e. unlike
+other load balancers that try the servers one after another, this
+module calculates a certain hash function of the request URI, and then
+delegates the request to the "right" memcached server, the same that
+would be used by the Perl module.  This enables the setup where the
+data is uploaded to memcached servers by the Perl script (possibly a
+CGI script), and then served by nginx from there.
+
+
+INSTALLATION
+
+The latest release and Git repository are available from
+
+  http://openhack.ru/nginx-patched
+
+If you install both this module and nginx 0.5.x from the
+memcached_hash branch of the Git repo, you don't have to apply any
+patches as described below.
+
+
+All nginx modules are meant to be statically compiled into nginx
+server, so first you have to obtain nginx server source code:
+
+  http://nginx.net/
+
+Unpack server and module archives into some temporal location, and cd
+to _server_ directory.  From there do
+
+  cat /path/to/ngx_http_upstream_memcached_hash_module/nginx-patches/* \
+      | patch -N -p2
+
+This will apply minor patches to the server code.  The patches do not
+change nginx functionality, they only add some utility functions that
+are used in the module.  The patches should apply cleanly against
+nginx 0.5 stable branch (fuzz shift is OK).  One of the patches is
+actually a backport of some functionality from 0.6, so when applied to
+0.6 development branch the following warning will be given:
+
+  Reversed (or previously applied) patch detected!  Skipping patch.
+
+This is OK for files src/core/nginx.c, src/core/ngx_crc32.c,
+src/core/ngx_crc32.h, and this is what -N argument above is for.
+
+After applying the patches do
+
+  ./configure \
+      --add-module=/path/to/ngx_http_upstream_memcached_hash_module/
+
+If you already have nginx installed, you'd probably want to also
+specify the configure parameters you have used before.  To see what
+arguments have been given to configure for currently installed nginx
+server, run 'nginx -V'.  At last, do
+
+  make
+  make install
+
+This will install nginx server.  Do not forget to restart the server
+if it was running, but before starting the new one you will have to
+update the configuration file.  See the next section.
+
+
+USAGE
+
+As a quick start, you'll add something like
+
+  upstream memcached_cluster {
+      memcached_hash  ketama_points=150  weight_scale=10;
+
+      server  backend1.example.com:11211  weight=15;
+      server  127.0.0.1:11211  weight=10  max_fails=3  fail_timeout=30s;
+
+      server  unix:/tmp/memcached.sock  weight=10  down;
+  }
+
+into the nginx server configuration file, and then you'll use
+memcached_cluster in memcached_pass directive:
+
+  server {
+      location / {
+          set             $memcached_key   "$uri$is_args$args";
+          set             $memcached_namespace   "prefix";
+          memcached_pass  memcached_cluster;
+          error_page      404 502 504 = @fallback;
+      }
+
+      location @fallback {
+          proxy_pass      http://backend;
+      }
+  }
+
+
+In the upstream block the essential directive is memcached_hash.
+There are two different hashing modes: basic and Ketama.  Basic mode
+is compatible with both Cache::Memcached::Fast and Cache::Memcached.
+It is enabled by specifying memcached_hash without any parameters,
+i.e.
+
+  upstream memcached_cluster {
+      memcached_hash;
+      ...
+  }
+
+In this mode you specify the same servers and their weights as you did
+in the Perl script, _in the same order_.  For instance, if the script
+has
+
+  use Cache::Memcached::Fast;
+
+  my $memd = new Cache::Memcached::Fast({
+      servers => [ { address => 'localhost:11211', weight => 2 },
+                   '192.168.254.2:11211',
+                   { address => '/path/to/unix.sock', weight => 4 } ],
+      ...
+  });
+
+in nginx configuration file you'd write
+
+  upstream memcached_cluster {
+      memcached_hash;
+
+      server localhost:11211 weight=2;
+      server 192.168.254.2:11211;
+      server unix:/path/to/unix.sock weight=4;
+  }
+
+Note that the server order is the same, and weight=1 is the default in
+both configurations.
+
+Ketama mode uses the Ketama consistent hashing algorithm that is
+compatible with Cache::Memcached::Fast (see Perl module documentation
+for further explanation and references).  It is enabled by specifying
+positive ketama_points argument to memcached_hash, and possibly
+weight_scale, since nginx's weights are always integer.  For instance,
+if you have this in your Perl script
+
+  use Cache::Memcached::Fast;
+
+  my $memd = new Cache::Memcached::Fast({
+      servers => [ { address => 'localhost:11211', weight => 2.5 },
+                   '192.168.254.2:11211',
+                   { address => '/path/to/unix.sock', weight => 4 } ],
+      ketama_points => 150,
+      ...
+  });
+
+(note the rational server weight of 2.5, and ketama_points), your
+nginx configuration will have
+
+  upstream memcached_cluster {
+      memcached_hash ketama_points=150 weight_scale=10;
+
+      server localhost:11211 weight=25;
+      server 192.168.254.2:11211 weight=10;
+      server unix:/path/to/unix.sock weight=40;
+  }
+
+Note that 192.168.254.2:11211 has the default weight of 1, but since
+we scale all weights to 10, we have to explicitly specify weight=10.
+
+You may actually use rational server weights without enabling the
+Ketama algorithm by using weight_scale while omitting ketama_points
+(or setting it to zero) in both Cache::Memcached::Fast constructor and
+nginx configuration file.  As of this writing Cache::Memcached
+supports only integer weights and does not support consistent hashing.
+
+If the client uses a namespace, i.e. constructor has
+
+  namespace => 'prefix',
+
+then you have to set $memcached_namespace variable in nginx
+configuration file:
+
+  set  $memcached_namespace  "prefix";
+
+Note that this is not the same as prepending prefix to $memcached_key:
+namespace prefix is not hashed when the key is hashed to decide which
+memcached server to talk to.
+
+Also note that nginx escapes an URI key before sending the request to
+memcached.  As of this writing the transformation is equivalent to the
+Perl code
+
+  use bytes;
+  $uri =~ s/[\x00-\x1f %]/ sprintf "%%%02x", ord $& /ge;
+
+I.e. percent sign ('%'), space (' '), and control characters with the
+codes in the range 0x00--0x1f are replaced with percent sign and two
+digit hexadecimal character code (with a-f in lowercase).  You have to
+escape URI keys the same way before uploading the data to memcached
+server, otherwise nginx won't find them.
+
+
+SUPPORT
+
+http://openhack.ru/nginx-patched - project home.
+
+Send bug reports and feature requests to <tomash.brechko@gmail.com>.
+
+
+ACKNOWLEDGEMENTS
+
+Development of this module is sponsored by Monashev Co. Ltd.
+
+
+COPYRIGHT AND LICENCE
+
+Copyright (C) 2007-2008 Tomash Brechko.  All rights reserved.
+
+This module is distributed on the same terms as the rest of nginx
+source code.
