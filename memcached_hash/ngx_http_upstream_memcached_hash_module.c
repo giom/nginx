@@ -316,7 +316,7 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
               memd->buckets[j].point =
                 (memd->buckets[j].point
                  - ((uint64_t) memd->buckets[j].point * server[i].weight
-                    + total_weight / 2) / total_weight);
+                    / total_weight));
             }
 
           memd->buckets[i].point = CONTINUUM_MAX_POINT;
