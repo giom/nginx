@@ -628,9 +628,12 @@ ngx_http_gzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 /*
                  * On decompression we could already output everything
                  * under (ctx->flush == Z_SYNC_FLUSH), so we test here
-                 * that the buffer is not empty.
+                 * that the buffer is not empty, or Transfer-Encoding:
+                 * is chunked.  In the latter case we output empty
+                 * buffer to get last zero length chunk.
                  */
-                if (!r->gunzip || ctx->out_buf->last > ctx->out_buf->pos) {
+                if (!r->gunzip || ctx->out_buf->last > ctx->out_buf->pos
+                    || r->chunked) {
                     cl->buf = ctx->out_buf;
                     cl->next = NULL;
                     *ctx->last_out = cl;
