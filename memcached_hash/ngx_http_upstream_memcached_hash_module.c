@@ -169,7 +169,7 @@ memcached_hash_find_peer(ngx_peer_connection_t *pc, void *data)
         {
           unsigned int scaled_total_weight =
             (memd->total_weight + memd->scale / 2) / memd->scale;
-          point = ((point >> 16) & 0x00007fff);
+          point = ((point >> 16) & 0x00007fffU);
           point = point % scaled_total_weight;
           point = ((uint64_t) point * CONTINUUM_MAX_POINT
                    + scaled_total_weight / 2) / scaled_total_weight;
@@ -313,10 +313,9 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
           total_weight += server[i].weight;
           for (j = 0; j < i; ++j)
             {
-              memd->buckets[j].point =
-                (memd->buckets[j].point
-                 - ((uint64_t) memd->buckets[j].point * server[i].weight
-                    + total_weight / 2) / total_weight);
+              memd->buckets[j].point -=
+                (uint64_t) memd->buckets[j].point * server[i].weight
+                / total_weight;
             }
 
           memd->buckets[i].point = CONTINUUM_MAX_POINT;
