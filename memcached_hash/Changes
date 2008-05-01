@@ -1,5 +1,12 @@
 Revision history of ngx_http_upstream_memcached_hash_module.
 
+0.03  2008-05-01
+        - bugfix release.
+
+        Fix key distribution bug in compatible mode.  Because of
+        accumulated rounding error some keys were mapped to the
+        different server than with Cache::Memcached.
+
 
 0.02  2008-02-19
         - add support for $memcached_namespace variable.
