@@ -100,7 +100,7 @@ static ngx_int_t ngx_http_ssi_endblock(ngx_http_request_t *r,
     ngx_http_ssi_ctx_t *ctx, ngx_str_t **params);
 
 static ngx_int_t ngx_http_ssi_date_gmt_local_variable(ngx_http_request_t *r,
-    ngx_http_variable_value_t *v,  uintptr_t gmt);
+    ngx_http_variable_value_t *v, uintptr_t gmt);
 
 static char *ngx_http_ssi_types(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 
@@ -558,8 +558,9 @@ ngx_http_ssi_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                     if (b->in_file) {
                         if (slcf->min_file_chunk < (size_t) (b->last - b->pos))
                         {
-                            b->file_last = b->file_pos + (b->last - b->start);
-                            b->file_pos += b->pos - b->start;
+                            b->file_last = b->file_pos
+                                                   + (b->last - ctx->buf->pos);
+                            b->file_pos += b->pos - ctx->buf->pos;
 
                         } else {
                             b->in_file = 0;
@@ -1637,7 +1638,7 @@ ngx_http_ssi_evaluate_string(ngx_http_request_t *r, ngx_http_ssi_ctx_t *ctx,
 
         quoted = 0;
 
-        for (i = 0 ; i < text->len; i++) {
+        for (i = 0; i < text->len; i++) {
             ch = text->data[i];
 
             if (!quoted) {
@@ -2647,7 +2648,7 @@ ngx_http_ssi_endblock(ngx_http_request_t *r, ngx_http_ssi_ctx_t *ctx,
 
 static ngx_int_t
 ngx_http_ssi_date_gmt_local_variable(ngx_http_request_t *r,
-    ngx_http_variable_value_t *v,  uintptr_t gmt)
+    ngx_http_variable_value_t *v, uintptr_t gmt)
 {
     ngx_http_ssi_ctx_t  *ctx;
     ngx_time_t          *tp;
