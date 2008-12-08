@@ -327,19 +327,12 @@ static ngx_str_t  ngx_http_get_name = { 3, (u_char *) "GET " };
 ngx_int_t
 ngx_http_special_response_handler(ngx_http_request_t *r, ngx_int_t error)
 {
-    ngx_int_t                  rc;
     ngx_uint_t                 i, err;
     ngx_http_err_page_t       *err_page;
     ngx_http_core_loc_conf_t  *clcf;
 
     ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "http special response: %d, \"%V\"", error, &r->uri);
-
-    rc = ngx_http_discard_request_body(r);
-
-    if (rc == NGX_HTTP_INTERNAL_SERVER_ERROR) {
-        error = NGX_HTTP_INTERNAL_SERVER_ERROR;
-    }
 
     r->err_status = error;
 
@@ -370,7 +363,7 @@ ngx_http_special_response_handler(ngx_http_request_t *r, ngx_int_t error)
 
     clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
 
-    if (!r->error_page && clcf->error_pages) {
+    if (!r->error_page && clcf->error_pages && r->uri_changes != 0) {
 
         if (clcf->recursive_error_pages == 0) {
             r->error_page = 1;
@@ -383,6 +376,10 @@ ngx_http_special_response_handler(ngx_http_request_t *r, ngx_int_t error)
                 return ngx_http_send_error_page(r, &err_page[i]);
             }
         }
+    }
+
+    if (ngx_http_discard_request_body(r) != NGX_OK) {
+        error = NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
 
     if (clcf->msie_refresh
@@ -492,8 +489,10 @@ ngx_http_send_error_page(ngx_http_request_t *r, ngx_http_err_page_t *err_page)
 
     if (uri->data[0] == '/') {
 
-        r->method = NGX_HTTP_GET;
-        r->method_name = ngx_http_get_name;
+        if (r->method != NGX_HTTP_HEAD) {
+            r->method = NGX_HTTP_GET;
+            r->method_name = ngx_http_get_name;
+        }
 
         return ngx_http_internal_redirect(r, uri, args);
     }
