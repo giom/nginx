@@ -1,0 +1,3 @@
+[submodule "nginx_accept_language_module"]
+	path = nginx_accept_language_module
+	url = git://github.com/giom/nginx_accept_language_module.git
