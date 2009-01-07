@@ -1,0 +1,86 @@
+Introduction
+============
+
+This module adds a new command for the nginx configuration file: set_from_cookie
+
+To use it: set_from_cookie CookieName $some_var; 
+
+This will cause every reference to $some_var to return the value of the 
+cookie called CookieName. 
+
+I developed it to use in conjunction with the hash proxy module and my 
+random module, to allow client stickeness from initial request until the 
+client session ends. Here is a snippet of the configuration I'm using:
+
+server {
+    listen       80;
+
+    server_name  www.my-host.com;
+
+
+    set_random $random_num;
+    set_from_cookie "morph_lb_id" $cookie_var;
+
+    if ($cookie_var !~ ^\d+$) {
+        set $morph_lb_id $random_num;
+        set $morph_cookie "morph_lb_id=$morph_lb_id; $http_cookie";
+        set $set_cookie_var "morph_lb_id=$morph_lb_id";
+    }
+
+    if ($cookie_var ~ ^\d+$) {
+        set $morph_cookie $http_cookie;
+    }
+
+    location / {
+        proxy_set_header Cookie $morph_cookie;
+        add_header Set-Cookie $set_cookie_var;
+
+        root   html;
+        index  index.html index.htm;
+        if (!-f $request_filename) {
+            proxy_pass http://mongrel;
+            break;
+        }
+
+    }
+}
+
+
+
+This configuration is used where nginx serves as both an incoming proxy and as a 
+load balancer. The load balancer is in the upstream and will read the cookie
+to load balance. But could also be user here, using the variable $morph_lb_id
+as the key in the following upstream:
+
+
+upstream my_app_servers {
+    server app_1;
+    server app_2;
+    hash   $morph_lb_id;
+}
+
+
+
+Installation
+============
+
+Download the Nginx sources from http://nginx.net/ and unpack it.
+
+To build Nginx, change to the directory which contains the Nginx
+sources, and run the configuration script making sure to add the path
+to the set-random sources using the --add-module option.
+
+  $ ./configure --add-module=/path/to/mod-read-cookies
+
+
+Build and install the software:
+
+  $ make
+  $ sudo make install
+
+
+Questions? Comments?
+====================
+
+You can always email me with comments, questions and requests: guy@mor.ph
+
