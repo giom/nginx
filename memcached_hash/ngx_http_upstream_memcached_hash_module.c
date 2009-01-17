@@ -98,57 +98,6 @@ memcached_hash_find_bucket(struct memcached_hash *memd, unsigned int point)
 
 static
 unsigned int
-memcached_hash_find_peer(struct memcached_hash_find_ctx *find_ctx);
-
-
-static
-ngx_int_t
-memcached_hash_get_peer(ngx_peer_connection_t *pc, void *data)
-{
-  struct memcached_hash_find_ctx *find_ctx = data;
-  struct memcached_hash_peer *peer = find_ctx->peer;
-  ngx_peer_addr_t *addr;
-
-  if (! peer)
-    {
-      unsigned int index;
-
-      index = memcached_hash_find_peer(find_ctx);
-
-      peer = find_ctx->peer;
-      pc->tries = find_ctx->server[index].naddrs;
-    }
-
-  if (peer->server->down)
-    goto fail;
-
-  if (peer->server->max_fails > 0 && peer->fails >= peer->server->max_fails)
-    {
-      time_t now = ngx_time();
-      if (now - peer->accessed <= peer->server->fail_timeout)
-        goto fail;
-      else
-        peer->fails = 0;
-    }
-
-  addr = &peer->server->addrs[peer->addr_index];
-
-  pc->sockaddr = addr->sockaddr;
-  pc->socklen = addr->socklen;
-  pc->name = &addr->name;
-
-  return NGX_OK;
-
-fail:
-  /* This is the last try.  */
-  pc->tries = 1;
-
-  return NGX_BUSY;
-}
-
-
-static
-unsigned int
 memcached_hash_find_peer(struct memcached_hash_find_ctx *find_ctx)
 {
   struct memcached_hash *memd = find_ctx->memd;
@@ -203,6 +152,52 @@ memcached_hash_find_peer(struct memcached_hash_find_ctx *find_ctx)
   find_ctx->peer = &memd->peers[index];
 
   return index;
+}
+
+
+static
+ngx_int_t
+memcached_hash_get_peer(ngx_peer_connection_t *pc, void *data)
+{
+  struct memcached_hash_find_ctx *find_ctx = data;
+  struct memcached_hash_peer *peer = find_ctx->peer;
+  ngx_peer_addr_t *addr;
+
+  if (! peer)
+    {
+      unsigned int index;
+
+      index = memcached_hash_find_peer(find_ctx);
+
+      peer = find_ctx->peer;
+      pc->tries = find_ctx->server[index].naddrs;
+    }
+
+  if (peer->server->down)
+    goto fail;
+
+  if (peer->server->max_fails > 0 && peer->fails >= peer->server->max_fails)
+    {
+      time_t now = ngx_time();
+      if (now - peer->accessed <= peer->server->fail_timeout)
+        goto fail;
+      else
+        peer->fails = 0;
+    }
+
+  addr = &peer->server->addrs[peer->addr_index];
+
+  pc->sockaddr = addr->sockaddr;
+  pc->socklen = addr->socklen;
+  pc->name = &addr->name;
+
+  return NGX_OK;
+
+fail:
+  /* This is the last try.  */
+  pc->tries = 1;
+
+  return NGX_BUSY;
 }
 
 
