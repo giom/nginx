@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2007-2008 Tomash Brechko.  All rights reserved.
+  Copyright (C) 2007-2009 Tomash Brechko.  All rights reserved.
 
   Development of this module was sponsored by Monashev Co. Ltd.
 
@@ -54,6 +54,7 @@ struct memcached_hash_find_ctx
   struct memcached_hash *memd;
   ngx_http_upstream_server_t *server;
   ngx_http_request_t *request;
+  struct memcached_hash_peer *peer;
 };
 
 
@@ -96,11 +97,27 @@ memcached_hash_find_bucket(struct memcached_hash *memd, unsigned int point)
 
 
 static
+unsigned int
+memcached_hash_find_peer(struct memcached_hash_find_ctx *find_ctx);
+
+
+static
 ngx_int_t
 memcached_hash_get_peer(ngx_peer_connection_t *pc, void *data)
 {
-  struct memcached_hash_peer *peer = data;
+  struct memcached_hash_find_ctx *find_ctx = data;
+  struct memcached_hash_peer *peer = find_ctx->peer;
   ngx_peer_addr_t *addr;
+
+  if (! peer)
+    {
+      unsigned int index;
+
+      index = memcached_hash_find_peer(find_ctx);
+
+      peer = find_ctx->peer;
+      pc->tries = find_ctx->server[index].naddrs;
+    }
 
   if (peer->server->down)
     goto fail;
@@ -131,10 +148,9 @@ fail:
 
 
 static
-ngx_int_t
-memcached_hash_find_peer(ngx_peer_connection_t *pc, void *data)
+unsigned int
+memcached_hash_find_peer(struct memcached_hash_find_ctx *find_ctx)
 {
-  struct memcached_hash_find_ctx *find_ctx = data;
   struct memcached_hash *memd = find_ctx->memd;
   u_char *key;
   size_t len;
@@ -184,11 +200,9 @@ memcached_hash_find_peer(ngx_peer_connection_t *pc, void *data)
       index = memd->buckets[bucket].index;
     }
 
-  pc->data = &memd->peers[index];
-  pc->get = memcached_hash_get_peer;
-  pc->tries = find_ctx->server[index].naddrs;
+  find_ctx->peer = &memd->peers[index];
 
-  return memcached_hash_get_peer(pc, pc->data);
+  return index;
 }
 
 
@@ -197,7 +211,8 @@ void
 memcached_hash_free_peer(ngx_peer_connection_t *pc, void *data,
                          ngx_uint_t state)
 {
-  struct memcached_hash_peer *peer = data;
+  struct memcached_hash_find_ctx *find_ctx = data;
+  struct memcached_hash_peer *peer = find_ctx->peer;
 
   if (state & NGX_PEER_FAILED)
     {
@@ -242,6 +257,7 @@ memcached_hash_init_peer(ngx_http_request_t *r,
   find_ctx->memd = memd;
   find_ctx->request = r;
   find_ctx->server = us->servers->elts;
+  find_ctx->peer = NULL;
 
   r->upstream->peer.free = memcached_hash_free_peer;
 
@@ -249,7 +265,7 @@ memcached_hash_init_peer(ngx_http_request_t *r,
     The following values will be replaced by
     memcached_hash_find_peer().
   */
-  r->upstream->peer.get = memcached_hash_find_peer;
+  r->upstream->peer.get = memcached_hash_get_peer;
   r->upstream->peer.data = find_ctx;
   r->upstream->peer.tries = 1;
 

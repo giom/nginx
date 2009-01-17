@@ -3,7 +3,11 @@ Revision history of ngx_http_upstream_memcached_hash_module.
 0.04  ???
         - ???
 
-        ???
+        Do not change callback and data pointers passed by nginx after
+        module initialization.  This makes the module compatible with
+        other intermediate "balancers" up the chain.  Such balancers
+        do not perform actual balancing, but may process host address
+        that we return, for instance map it to cached open connection.
 
 
 0.03  2008-05-01
