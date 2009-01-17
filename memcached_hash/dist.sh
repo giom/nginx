@@ -1,5 +1,11 @@
 #! /bin/sh
 
+BRANCH=$1
+if [ "x$BRANCH" = "x" ]; then
+    echo "Usage: $0 NGINX-BRANCH"
+    exit 1
+fi
+
 PWD=`pwd`
 SCRIPT="$PWD/$0"
 DIR=`dirname "$SCRIPT"`
@@ -12,7 +18,7 @@ PATCHES="$DIR/$DIST"/nginx-patches
 mkdir "$DIST"
 mkdir "$PATCHES"
 
-git format-patch -o "$PATCHES" heads/memcached_hash ^stable ../server/
+git format-patch -o "$PATCHES" HEAD ^$BRANCH ../server/
 
 cp Changes config ngx_http_upstream_memcached_hash_module.c README "$DIST" ||
   exit 1
