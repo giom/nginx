@@ -343,7 +343,7 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
           static const char delim = '\0';
           u_char *host, *port;
           size_t len, port_len = 0;
-          unsigned int crc32, count, j;
+          unsigned int crc32, point, count, j;
 
           host = server[i].name.data;
           len = server[i].name.len;
@@ -371,25 +371,27 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
           ngx_crc32_update(&crc32, host, len);
           ngx_crc32_update(&crc32, (u_char *) &delim, 1);
           ngx_crc32_update(&crc32, port, port_len);
+          point = 0;
 
           count = (memd->ketama_points * server[i].weight
                    + memd->scale / 2) / memd->scale;
           for (j = 0; j < count; ++j)
             {
               u_char buf[4];
-              unsigned int point = crc32, bucket;
+              unsigned int new_point = crc32, bucket;
 
               /*
                 We want the same result on all platforms, so we
                 hardcode size of int as 4 8-bit bytes.
               */
-              buf[0] = j & 0xff;
-              buf[1] = (j >> 8) & 0xff;
-              buf[2] = (j >> 16) & 0xff;
-              buf[3] = (j >> 24) & 0xff;
+              buf[0] = point & 0xff;
+              buf[1] = (point >> 8) & 0xff;
+              buf[2] = (point >> 16) & 0xff;
+              buf[3] = (point >> 24) & 0xff;
 
-              ngx_crc32_update(&point, buf, 4);
-              ngx_crc32_final(point);
+              ngx_crc32_update(&new_point, buf, 4);
+              ngx_crc32_final(new_point);
+              point = new_point;
 
               if (memd->buckets_count > 0)
                 {
