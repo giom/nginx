@@ -1,12 +1,12 @@
 /*
-  Copyright (C) 2007-2008 Tomash Brechko.  All rights reserved.
+  Copyright (C) 2007-2009 Tomash Brechko.  All rights reserved.
 
   Development of this module was sponsored by Monashev Co. Ltd.
 
   This file is distributed on the same terms as the rest of nginx
   source code.
 
-  Version 0.03.
+  Version 0.04.
 */
 
 #include <ngx_config.h>
@@ -54,6 +54,7 @@ struct memcached_hash_find_ctx
   struct memcached_hash *memd;
   ngx_http_upstream_server_t *server;
   ngx_http_request_t *request;
+  struct memcached_hash_peer *peer;
 };
 
 
@@ -96,45 +97,9 @@ memcached_hash_find_bucket(struct memcached_hash *memd, unsigned int point)
 
 
 static
-ngx_int_t
-memcached_hash_get_peer(ngx_peer_connection_t *pc, void *data)
+unsigned int
+memcached_hash_find_peer(struct memcached_hash_find_ctx *find_ctx)
 {
-  struct memcached_hash_peer *peer = data;
-  ngx_peer_addr_t *addr;
-
-  if (peer->server->down)
-    goto fail;
-
-  if (peer->server->max_fails > 0 && peer->fails >= peer->server->max_fails)
-    {
-      time_t now = ngx_time();
-      if (now - peer->accessed <= peer->server->fail_timeout)
-        goto fail;
-      else
-        peer->fails = 0;
-    }
-
-  addr = &peer->server->addrs[peer->addr_index];
-
-  pc->sockaddr = addr->sockaddr;
-  pc->socklen = addr->socklen;
-  pc->name = &addr->name;
-
-  return NGX_OK;
-
-fail:
-  /* This is the last try.  */
-  pc->tries = 1;
-
-  return NGX_BUSY;
-}
-
-
-static
-ngx_int_t
-memcached_hash_find_peer(ngx_peer_connection_t *pc, void *data)
-{
-  struct memcached_hash_find_ctx *find_ctx = data;
   struct memcached_hash *memd = find_ctx->memd;
   u_char *key;
   size_t len;
@@ -184,11 +149,55 @@ memcached_hash_find_peer(ngx_peer_connection_t *pc, void *data)
       index = memd->buckets[bucket].index;
     }
 
-  pc->data = &memd->peers[index];
-  pc->get = memcached_hash_get_peer;
-  pc->tries = find_ctx->server[index].naddrs;
+  find_ctx->peer = &memd->peers[index];
 
-  return memcached_hash_get_peer(pc, pc->data);
+  return index;
+}
+
+
+static
+ngx_int_t
+memcached_hash_get_peer(ngx_peer_connection_t *pc, void *data)
+{
+  struct memcached_hash_find_ctx *find_ctx = data;
+  struct memcached_hash_peer *peer = find_ctx->peer;
+  ngx_peer_addr_t *addr;
+
+  if (! peer)
+    {
+      unsigned int index;
+
+      index = memcached_hash_find_peer(find_ctx);
+
+      peer = find_ctx->peer;
+      pc->tries = find_ctx->server[index].naddrs;
+    }
+
+  if (peer->server->down)
+    goto fail;
+
+  if (peer->server->max_fails > 0 && peer->fails >= peer->server->max_fails)
+    {
+      time_t now = ngx_time();
+      if (now - peer->accessed <= peer->server->fail_timeout)
+        goto fail;
+      else
+        peer->fails = 0;
+    }
+
+  addr = &peer->server->addrs[peer->addr_index];
+
+  pc->sockaddr = addr->sockaddr;
+  pc->socklen = addr->socklen;
+  pc->name = &addr->name;
+
+  return NGX_OK;
+
+fail:
+  /* This is the last try.  */
+  pc->tries = 1;
+
+  return NGX_BUSY;
 }
 
 
@@ -197,7 +206,8 @@ void
 memcached_hash_free_peer(ngx_peer_connection_t *pc, void *data,
                          ngx_uint_t state)
 {
-  struct memcached_hash_peer *peer = data;
+  struct memcached_hash_find_ctx *find_ctx = data;
+  struct memcached_hash_peer *peer = find_ctx->peer;
 
   if (state & NGX_PEER_FAILED)
     {
@@ -242,6 +252,7 @@ memcached_hash_init_peer(ngx_http_request_t *r,
   find_ctx->memd = memd;
   find_ctx->request = r;
   find_ctx->server = us->servers->elts;
+  find_ctx->peer = NULL;
 
   r->upstream->peer.free = memcached_hash_free_peer;
 
@@ -249,7 +260,7 @@ memcached_hash_init_peer(ngx_http_request_t *r,
     The following values will be replaced by
     memcached_hash_find_peer().
   */
-  r->upstream->peer.get = memcached_hash_find_peer;
+  r->upstream->peer.get = memcached_hash_get_peer;
   r->upstream->peer.data = find_ctx;
   r->upstream->peer.tries = 1;
 
@@ -313,8 +324,9 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
           total_weight += server[i].weight;
           for (j = 0; j < i; ++j)
             {
-              memd->buckets[j].point -=
-                (uint64_t) memd->buckets[j].point * server[i].weight
+              memd->buckets[j].point =
+                (uint64_t) memd->buckets[j].point
+                * (total_weight - server[i].weight)
                 / total_weight;
             }
 
@@ -331,7 +343,7 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
           static const char delim = '\0';
           u_char *host, *port;
           size_t len, port_len = 0;
-          unsigned int crc32, count, j;
+          unsigned int crc32, point, count, j;
 
           host = server[i].name.data;
           len = server[i].name.len;
@@ -359,25 +371,27 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
           ngx_crc32_update(&crc32, host, len);
           ngx_crc32_update(&crc32, (u_char *) &delim, 1);
           ngx_crc32_update(&crc32, port, port_len);
+          point = 0;
 
           count = (memd->ketama_points * server[i].weight
                    + memd->scale / 2) / memd->scale;
           for (j = 0; j < count; ++j)
             {
               u_char buf[4];
-              unsigned int point = crc32, bucket;
+              unsigned int new_point = crc32, bucket;
 
               /*
                 We want the same result on all platforms, so we
                 hardcode size of int as 4 8-bit bytes.
               */
-              buf[0] = j & 0xff;
-              buf[1] = (j >> 8) & 0xff;
-              buf[2] = (j >> 16) & 0xff;
-              buf[3] = (j >> 24) & 0xff;
+              buf[0] = point & 0xff;
+              buf[1] = (point >> 8) & 0xff;
+              buf[2] = (point >> 16) & 0xff;
+              buf[3] = (point >> 24) & 0xff;
 
-              ngx_crc32_update(&point, buf, 4);
-              ngx_crc32_final(point);
+              ngx_crc32_update(&new_point, buf, 4);
+              ngx_crc32_final(new_point);
+              point = new_point;
 
               if (memd->buckets_count > 0)
                 {
