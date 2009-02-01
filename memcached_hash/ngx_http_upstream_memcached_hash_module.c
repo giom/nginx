@@ -324,8 +324,9 @@ memcached_init_hash(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
           total_weight += server[i].weight;
           for (j = 0; j < i; ++j)
             {
-              memd->buckets[j].point -=
-                (uint64_t) memd->buckets[j].point * server[i].weight
+              memd->buckets[j].point =
+                (uint64_t) memd->buckets[j].point
+                * (total_weight - server[i].weight)
                 / total_weight;
             }
 
