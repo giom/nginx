@@ -1,4 +1,15 @@
 
+Changes with nginx 0.6.35                                        26 Jan 2009
+
+    *) Bugfix: in shared memory allocations if nginx was built without 
+       debugging.
+       Thanks to Andrey Kvasov.
+
+    *) Bugfixes in an "Expect" request header line support.
+
+    *) Bugfix: UTF-8 encoding usage in the ngx_http_autoindex_module.
+
+
 Changes with nginx 0.6.34                                        27 Nov 2008
 
     *) Change: now the EAGAIN error returned by connect() is not considered 
