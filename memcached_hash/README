@@ -19,9 +19,9 @@ The latest release and Git repository are available from
 
   http://openhack.ru/nginx-patched
 
-If you install both this module and nginx 0.5.x from the
-memcached_hash branch of the Git repo, you don't have to apply any
-patches as described below.
+If you install both this module and nginx 0.7.x from the master-v0.7
+branch of the Git repo (this is recommended), you don't have to apply
+any patches as described below.
 
 
 All nginx modules are meant to be statically compiled into nginx
@@ -30,22 +30,17 @@ server, so first you have to obtain nginx server source code:
   http://nginx.net/
 
 Unpack server and module archives into some temporal location, and cd
-to _server_ directory.  From there do
+to server directory.  From there do
 
   cat /path/to/ngx_http_upstream_memcached_hash_module/nginx-patches/* \
       | patch -N -p2
 
 This will apply minor patches to the server code.  The patches do not
 change nginx functionality, they only add some utility functions that
-are used in the module.  The patches should apply cleanly against
-nginx 0.5 stable branch (fuzz shift is OK).  One of the patches is
-actually a backport of some functionality from 0.6, so when applied to
-0.6 development branch the following warning will be given:
-
-  Reversed (or previously applied) patch detected!  Skipping patch.
-
-This is OK for files src/core/nginx.c, src/core/ngx_crc32.c,
-src/core/ngx_crc32.h, and this is what -N argument above is for.
+are used in the module.  The patches may not apply cleanly.  In this
+case just proceed, if everything compiles OK than you are safe.  If
+not, you'll have to figure things out and apply the changes manually
+(or just build from openhack repo as advised above).
 
 After applying the patches do
 
@@ -66,6 +61,10 @@ update the configuration file.  See the next section.
 
 
 USAGE
+
+Module configuration is documented at
+
+  http://openhack.ru/nginx-patched/wiki/MemcachedHash
 
 As a quick start, you'll add something like
 
@@ -200,17 +199,17 @@ SUPPORT
 
 http://openhack.ru/nginx-patched - project home.
 
-Send bug reports and feature requests to <tomash.brechko@gmail.com>.
+Send bug reports to <talk@openhack.ru>.
 
 
 ACKNOWLEDGEMENTS
 
-Development of this module is sponsored by Monashev Co. Ltd.
+Development of this module was sponsored by Monashev Co. Ltd.
 
 
 COPYRIGHT AND LICENCE
 
-Copyright (C) 2007-2008 Tomash Brechko.  All rights reserved.
+Copyright (C) 2007-2009 Tomash Brechko.  All rights reserved.
 
 This module is distributed on the same terms as the rest of nginx
 source code.
