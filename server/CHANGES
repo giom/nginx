@@ -1,4 +1,82 @@
 
+Changes with nginx 0.6.35                                        26 Jan 2009
+
+    *) Bugfix: in shared memory allocations if nginx was built without 
+       debugging.
+       Thanks to Andrey Kvasov.
+
+    *) Bugfixes in an "Expect" request header line support.
+
+    *) Bugfix: UTF-8 encoding usage in the ngx_http_autoindex_module.
+
+
+Changes with nginx 0.6.34                                        27 Nov 2008
+
+    *) Change: now the EAGAIN error returned by connect() is not considered 
+       as temporary error.
+
+    *) Change: now the "gzip_vary" directive turned on issues a 
+       "Vary: Accept-Encoding" header line for uncompressed responses too.
+
+    *) Feature: the "expires" directive supports daily time.
+
+    *) Feature: the "Expect" request header line support.
+
+    *) Feature: now the "rewrite" directive does a redirect automatically 
+       if the "https://" protocol is used.
+
+    *) Bugfix: the "listen" directive parameters such as "backlog", 
+       "rcvbuf", etc. were not set, if a default server was not the first 
+       one.
+
+    *) Bugfix: the "log_not_found" directive did not work for index files 
+       tests.
+
+    *) Bugfix: now if FastCGI server sends a "Location" header line without 
+       status line, then nginx uses 302 status code.
+       Thanks to Maxim Dounin.
+
+    *) Bugfix: the ngx_http_flv_module did not support several values in a 
+       query string.
+
+    *) Bugfix: when a request to a directory was redirected with the slash 
+       added, nginx dropped a query string from the original request.
+
+
+Changes with nginx 0.6.33                                        20 Nov 2008
+
+    *) Feature: now nginx returns the 405 status code for POST method 
+       requesting a static file only if the file exists.
+
+    *) Workaround: compatibility with glibc 2.3.
+       Thanks to Eric Benson and Maxim Dounin.
+
+    *) Bugfix: the resolver did not understand big DNS responses.
+       Thanks to Zyb.
+
+    *) Bugfix: in HTTPS mode requests might fail with the "bad write retry" 
+       error.
+
+    *) Bugfix: the ngx_http_charset_module did not understand quoted 
+       charset name received from backend.
+
+    *) Bugfix: if the "max_fails=0" parameter was used in upstream with 
+       several servers, then a worker process exited on a SIGFPE signal.
+       Thanks to Maxim Dounin.
+
+    *) Bugfix: the $r->header_in() method did not return value of the 
+       "Host", "User-Agent", and "Connection" request header lines; the bug 
+       had appeared in 0.6.32.
+
+    *) Bugfix: a full response was returned for request method HEAD while 
+       redirection via an "error_page" directive.
+
+    *) Bugfix: if a directory has search only rights and the first index 
+       file was absent, then nginx returned the 500 status code.
+
+    *) Bugfix: of recursive error_page for 500 status code.
+
+
 Changes with nginx 0.6.32                                        07 Jul 2008
 
     *) Change: the "none" parameter in the "ssl_session_cache" directive; 
@@ -274,8 +352,7 @@ Changes with nginx 0.6.22                                        19 Dec 2007
 Changes with nginx 0.6.21                                        03 Dec 2007
 
     *) Change: if variable values used in a "proxy_pass" directive contain 
-       IP-addresses only, then a "resolver" directive is not mandatory. 
-       resolver
+       IP-addresses only, then a "resolver" directive is not mandatory.
 
     *) Bugfix: a segmentation fault might occur in worker process if a 
        "proxy_pass" directive with URI-part was used; the bug had appeared 
@@ -1427,7 +1504,7 @@ Changes with nginx 0.3.55                                        28 Jul 2006
     *) Bugfix: if the request contained "//" or "/./" and escaped symbols 
        after them, then the proxied request was sent unescaped.
 
-    *) Bugfix: the $r->headers_in("Cookie") of the ngx_http_perl_module now 
+    *) Bugfix: the $r->header_in("Cookie") of the ngx_http_perl_module now 
        returns all "Cookie" header lines.
 
     *) Bugfix: a segmentation fault occurred if 

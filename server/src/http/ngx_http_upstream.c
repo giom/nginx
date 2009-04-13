@@ -137,7 +137,8 @@ ngx_http_upstream_header_t  ngx_http_upstream_headers_in[] = {
                  ngx_http_upstream_copy_header_line, 0, 0 },
 
     { ngx_string("Location"),
-                 ngx_http_upstream_ignore_header_line, 0,
+                 ngx_http_upstream_process_header_line,
+                 offsetof(ngx_http_upstream_headers_in_t, location),
                  ngx_http_upstream_rewrite_location, 0, 0 },
 
     { ngx_string("Refresh"),
@@ -2396,7 +2397,9 @@ ngx_http_upstream_finalize_request(ngx_http_request_t *r,
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "finalize http upstream request: %i", rc);
 
-    *u->cleanup = NULL;
+    if (u->cleanup) {
+        *u->cleanup = NULL;
+    }
 
     if (u->state && u->state->response_sec) {
         tp = ngx_timeofday();
@@ -2677,7 +2680,17 @@ ngx_http_upstream_copy_content_type(ngx_http_request_t *r, ngx_table_elt_t *h,
 
         r->headers_out.content_type_len = last - h->value.data;
 
-        r->headers_out.charset.len = h->value.data + h->value.len - p;
+        if (*p == '"') {
+            p++;
+        }
+
+        last = h->value.data + h->value.len;
+
+        if (*(last - 1) == '"') {
+            last--;
+        }
+
+        r->headers_out.charset.len = last - p;
         r->headers_out.charset.data = p;
 
         return NGX_OK;

@@ -841,7 +841,6 @@ ngx_http_core_find_config_phase(ngx_http_request_t *r,
         return NGX_OK;
     }
 
-
     if (rc == NGX_HTTP_LOCATION_AUTO_REDIRECT) {
         r->headers_out.location = ngx_list_push(&r->headers_out.headers);
         if (r->headers_out.location == NULL) {
@@ -1822,6 +1821,7 @@ ngx_http_subrequest(ngx_http_request_t *r,
     sr->fast_subrequest = 1;
 
     sr->discard_body = r->discard_body;
+    sr->expect_tested = 1;
     sr->main_filter_need_in_memory = r->main_filter_need_in_memory;
 
     sr->uri_changes = NGX_HTTP_MAX_URI_CHANGES + 1;

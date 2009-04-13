@@ -1,5 +1,25 @@
 Revision history of ngx_http_upstream_memcached_hash_module.
 
+0.04  2009-02-07
+        - bugfix release, also breaks Ketama mode compatibility with
+        C::M::F 0.13 and below, upgrade C::M::F to at least 0.14.
+
+        Change calculation of Ketama points for a given server to get
+        mapping ratios closer to server weight ratios.  Ketama mode is
+        compatible with Cache::Memcached::Fast 0.14, which has the
+        same change, and is incompatible with earlier versions.
+
+        Fix key distribution bug in compatible mode.  Because of
+        rounding error some keys were mapped to wrong servers.  This
+        bug is different from the one fixed in 0.3.
+
+        Do not change callback and data pointers passed by nginx after
+        module initialization.  This makes the module compatible with
+        other intermediate "balancers" up the chain.  Such balancers
+        do not perform actual balancing, but may process host address
+        that we return, for instance map it to cached open connection.
+
+
 0.03  2008-05-01
         - bugfix release.
 
